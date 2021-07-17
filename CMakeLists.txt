@@ -55,6 +55,9 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
 include_directories(
   ${CMAKE_SOURCE_DIR}/
+  ${CMAKE_SOURCE_DIR}/build-include/
+  ${CMAKE_SOURCE_DIR}/llvm-include/
+  # ${CMAKE_SOURCE_DIR}/include
   # ${CMAKE_SOURCE_DIR}/include
 )
 
@@ -63,6 +66,8 @@ set(myparser_src
   ${CMAKE_SOURCE_DIR}/src/lexer.h
   ${CMAKE_SOURCE_DIR}/src/parser.h
   ${CMAKE_SOURCE_DIR}/src/parser.cc
+  ${CMAKE_SOURCE_DIR}/src/Codegen.h
+  ${CMAKE_SOURCE_DIR}/src/Codegen.cc
 )
 
 add_executable(cctest

@@ -7,27 +7,22 @@
 #include <map>
 #include "src/lexer.h"
 
-#include "include/llvm/ADT/APFloat.h"
-#include "include/llvm/ADT/STLExtras.h"
-#include "include/llvm/IR/BasicBlock.h"
-#include "include/llvm/IR/Constants.h"
-#include "include/llvm/IR/DerivedTypes.h"
-#include "include/llvm/IR/Function.h"
-#include "include/llvm/IR/IRBuilder.h"
-#include "include/llvm/IR/LLVMContext.h"
-#include "include/llvm/IR/Module.h"
-#include "include/llvm/IR/Type.h"
-#include "include/llvm/IR/Verifier.h"
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Verifier.h"
 
 namespace Kaleidoscope {
 
-using llvm::Value;
-using llvm::LLVMContext;
-using llvm::IRBuilder;
-using llvm::Module;
+using namespace llvm;
 
-using llvm::ConstantFP;
-using llvm::APFloat;
+class CodegenContext;
+
 // AST Node types:
 // Expression, Variable, Number, BinaryOp, Call, Prototype, Function
 
@@ -40,21 +35,21 @@ static std::map<std::string, Value*> ValMap;
 class ExprAST {
  public:
   virtual ~ExprAST() = default;
-  virtual Value* codegen() = 0;
+  virtual Value* codegen(CodegenContext& ctx) = 0;
 };
 
 class VariableExprAST : public ExprAST {
   std::string name_;
  public:
   VariableExprAST(std::string& name) : name_(name) {}
-  Value* codegen() override;
+  Value* codegen(CodegenContext& ctx) override;
 };
 
 class NumberExprAST : public ExprAST {
   double val_;
  public:
   NumberExprAST(double val) : val_(val) {}
-  Value* codegen() override;
+  Value* codegen(CodegenContext& ctx) override;
 };
 
 class BinaryExprAST : public ExprAST {
@@ -64,7 +59,7 @@ class BinaryExprAST : public ExprAST {
   BinaryExprAST(char op, std::unique_ptr<ExprAST> lhs,
                 std::unique_ptr<ExprAST> rhs)
       : op_(op), lhs_(std::move(lhs)), rhs_(std::move(rhs)) {}
-  Value* codegen() override;
+  Value* codegen(CodegenContext& ctx) override;
 };
 
 class CallExprAST : public ExprAST {
@@ -74,7 +69,7 @@ class CallExprAST : public ExprAST {
   CallExprAST(const std::string& callee,
               std::vector<std::unique_ptr<ExprAST>> args)
       : callee_(callee), args_(std::move(args)) {}
-  Value* codegen() override;
+  Value* codegen(CodegenContext& ctx) override;
 };
 
 class PrototypeAST : public ExprAST {
@@ -85,7 +80,10 @@ class PrototypeAST : public ExprAST {
   PrototypeAST(const std::string& name,
                std::vector<std::string> args)
       : name_(name), args_(std::move(args)) {}
-  Value* codegen() override;
+  std::string getName() {
+    return name_;
+  }
+  Function* codegen(CodegenContext& ctx) override;
 };
 
 class FunctionAST : public ExprAST {
@@ -95,12 +93,17 @@ class FunctionAST : public ExprAST {
   FunctionAST(std::unique_ptr<PrototypeAST> proto,
               std::unique_ptr<ExprAST> body)
       : proto_(std::move(proto)), body_(std::move(body)) {}
-  Value* codegen() override;
+  Function* codegen(CodegenContext& ctx) override;
 };
 
+std::unique_ptr<ExprAST> LogError(const char* info);
+Value* LogErrorV(const char* info);
+std::unique_ptr<PrototypeAST> LogErrorP(const char* info);
 class Parser {
   Lexer lexer_;
   int cur_token;
+
+  friend class CodegenDriver;
 
   void get_next_token() {
     cur_token = lexer_.next_token();
@@ -120,8 +123,6 @@ class Parser {
   std::unique_ptr<FunctionAST> ParseDefinition();
   std::unique_ptr<FunctionAST> ParseToplevelExpr();
 
-  std::unique_ptr<ExprAST> LogError(const char* info);
-  std::unique_ptr<PrototypeAST> LogErrorP(const char* info);
 #if DEBUG
   void LogInfo(const char* info);
 #endif

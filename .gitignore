@@ -4,4 +4,7 @@
 *.cmake
 CMakeCache.txt
 Makefile
+/bin
+/build-include
+/llvm-include
 

@@ -1,35 +1,110 @@
 
 #include "src/parser.h"
+#include "src/Codegen.h"
 #include <iostream>
 
 namespace Kaleidoscope {
 
-Value* NumberExprAST::codegen() {
-  return ConstantFP::get(TheContext, APFloat(val_));
+Value* NumberExprAST::codegen(CodegenContext& ctx) {
+  return ConstantFP::get(ctx.get_llvmcontext(), APFloat(val_));
 }
 
-Value* VariableExprAST::codegen() {
-  Value* val = ValMap[name_];
-  // if val is nullptr, logerror here
+Value* VariableExprAST::codegen(CodegenContext& ctx) {
+  Value* val = ctx.get_valmap()[name_];
+  if (!val)
+      return LogErrorV("variable is not defined.");
   return val;
 }
 
-Value* BinaryExprAST::codegen() {
-  Value* left = lhs_->codegen(), *right = rhs_->codegen();
+Value* BinaryExprAST::codegen(CodegenContext& ctx) {
+  Value* left = lhs_->codegen(ctx), *right = rhs_->codegen(ctx);
+  IRBuilder<>& irbuilder = ctx.get_irbuilder();
   switch(op_) {
     case '+':
       // create float add
-      return Builder.CreateFAdd(left, right, "addtmp");
+      return irbuilder.CreateFAdd(left, right, "addtmp");
     case '-':
-      return Builder.CreateFSub(left, right, "subtmp");
+      return irbuilder.CreateFSub(left, right, "subtmp");
     case '*':
-      return Builder.CreateFMul(left, right, "multmp");
+      return irbuilder.CreateFMul(left, right, "multmp");
     case '/':
-      return Builder.CreateFDiv(left, right, "divtmp");
+      return irbuilder.CreateFDiv(left, right, "divtmp");
     default:
       // TODO: logerror
+      return LogErrorV("Not supported binary operator.");
+  }
+}
+
+Value* CallExprAST::codegen(CodegenContext& ctx) {
+  Function* calleeFn = ctx.get_moduleptr()->getFunction(callee_);
+  if (!calleeFn)
+    return LogErrorV("Callee function is not defined."); // LogError here
+  
+  if (calleeFn->arg_size() != args_.size())
+    return LogErrorV("Incorrect quantity of arguments for this function call");  // LogError here
+  
+  std::vector<Value*> ArgsV;
+  for (int i = 0; i < args_.size(); ++i) {
+    ArgsV.push_back(args_[i]->codegen(ctx));
+    if (!ArgsV.back())
       return nullptr;
   }
+
+  return ctx.get_irbuilder().CreateCall(calleeFn, ArgsV, "calltemp");
+}
+
+Function* PrototypeAST::codegen(CodegenContext& ctx) {
+  // all arguments are double type
+  std::vector<Type*> doubles(args_.size(),
+                             Type::getDoubleTy(ctx.get_llvmcontext()));
+  
+  // both return value and all arguments are of double type
+  FunctionType* funcTy = FunctionType::get(
+      Type::getDoubleTy(ctx.get_llvmcontext()), doubles, false);
+  
+  // with function type, name and the module we are talking about
+  // we create a function in thie module, so that we can find it.
+  // Note that the module has a symbol table
+  Function* F = Function::Create(
+      funcTy, GlobalValue::ExternalLinkage, name_, ctx.get_moduleptr());
+  
+  unsigned idx = 0;
+  for (auto &arg : F->args())
+    arg.setName(args_[idx++]);
+
+  return F;
+}
+
+Function* FunctionAST::codegen(CodegenContext& ctx) {
+  Function* func = ctx.get_moduleptr()->getFunction(proto_->getName());
+
+  if (!func)
+    func = proto_->codegen(ctx);
+  
+  if (!func)
+    return nullptr;   // LogError here
+  
+  if (!func->empty())
+    return (Function*)LogErrorV("Function cannot be redefined.");
+  
+  BasicBlock* BB = BasicBlock::Create(ctx.get_llvmcontext(), "entry", func);
+  // make BB the next insertion place
+  ctx.get_irbuilder().SetInsertPoint(BB);
+
+  // make the ValMap current context
+  auto & val_map = ctx.get_valmap();
+  val_map.clear();
+  for(auto & arg : func->args())
+    val_map[arg.getName().str()] = &arg;
+  
+  if (Value* retVal = body_->codegen(ctx)) {
+    ctx.get_irbuilder().CreateRet(retVal);
+    verifyFunction(*func);
+
+    return func;
+  }
+  func->eraseFromParent();
+  return nullptr;
 }
 
 Parser::Parser(const char* src) :
@@ -166,15 +241,24 @@ std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
     return LogErrorP("[Parsing Error] Expecting an identifier here.");
 
   std::string FnName(lexer_.identifier_str());
+  // eat the file name idenrifier
   get_next_token();
 
   if (cur_token != '(')
     return LogErrorP("[Parsing Error] Expecting a left parenthesis '(' here.");
-  return nullptr;
+
+  // eat the left parenthesis of function def
+  get_next_token();
 
   std::vector<std::string> args_;
-  while (cur_token == Lexer::token_identifier)
+  while (cur_token == Lexer::token_identifier) {
     args_.push_back(lexer_.identifier_str());
+    get_next_token();
+
+    // eat comma directly
+    if (cur_token == ',')
+      get_next_token();
+  }
 
   if (cur_token != ')')
     return LogErrorP("[Parsing Error] Expecting an identifier here.");
@@ -238,12 +322,17 @@ void Parser::ParseToplevel(std::vector<std::unique_ptr<ExprAST>>& stmts) {
   }
 }
 
-std::unique_ptr<ExprAST> Parser::LogError(const char* info) {
+std::unique_ptr<ExprAST> LogError(const char* info) {
   std::cerr << info << std::endl;
   return nullptr;
 }
 
-std::unique_ptr<PrototypeAST> Parser::LogErrorP(const char* info) {
+Value* LogErrorV(const char* info) {
+  LogError(info);
+  return nullptr;
+}
+
+std::unique_ptr<PrototypeAST> LogErrorP(const char* info) {
   std::cerr << info << std::endl;
   return nullptr;
 }
