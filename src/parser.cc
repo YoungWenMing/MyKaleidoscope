@@ -36,7 +36,7 @@ Value* BinaryExprAST::codegen(CodegenContext& ctx) {
 }
 
 Value* CallExprAST::codegen(CodegenContext& ctx) {
-  Function* calleeFn = ctx.get_moduleptr()->getFunction(callee_);
+  Function* calleeFn = ctx.get_function(callee_);
   if (!calleeFn)
     return LogErrorV("Callee function is not defined."); // LogError here
   
@@ -76,11 +76,12 @@ Function* PrototypeAST::codegen(CodegenContext& ctx) {
 }
 
 Function* FunctionAST::codegen(CodegenContext& ctx) {
-  Function* func = ctx.get_moduleptr()->getFunction(proto_->getName());
+  // get prototype from CodegenContext
+  // store the function in FunctionProtos
+  PrototypeAST& P = *proto_; 
+  ctx.add_protos(std::move(proto_));
+  Function* func = ctx.get_function(P.getName());
 
-  if (!func)
-    func = proto_->codegen(ctx);
-  
   if (!func)
     return nullptr;   // LogError here
   
@@ -100,6 +101,8 @@ Function* FunctionAST::codegen(CodegenContext& ctx) {
   if (Value* retVal = body_->codegen(ctx)) {
     ctx.get_irbuilder().CreateRet(retVal);
     verifyFunction(*func);
+
+    ctx.doOptimization(*func);
 
     return func;
   }
@@ -293,7 +296,7 @@ std::unique_ptr<FunctionAST> Parser::ParseToplevelExpr() {
   std::unique_ptr<ExprAST> expr = ParseExpression();
   if (expr) {
     std::unique_ptr<PrototypeAST> proto =
-        std::make_unique<PrototypeAST>(std::string(""), std::vector<std::string>());
+        std::make_unique<PrototypeAST>(std::string("__anon_expr"), std::vector<std::string>());
     return std::make_unique<FunctionAST>(std::move(proto), std::move(expr));
   }
   return nullptr;
