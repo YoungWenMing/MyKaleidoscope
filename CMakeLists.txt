@@ -27,7 +27,16 @@ add_definitions(${LLVM_DEFINITIONS})
 
 
 llvm_map_components_to_libnames(REQ_LLVM_LIBRARIES
-  core support
+  Analysis
+  Core
+  ExecutionEngine
+  InstCombine
+  Object
+  OrcJIT
+  RuntimeDyld
+  ScalarOpts
+  Support
+  native
 )
 
 # add_compile_options(-fexceptions)

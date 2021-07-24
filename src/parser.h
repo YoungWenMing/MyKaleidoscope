@@ -96,6 +96,37 @@ class FunctionAST : public ExprAST {
   Function* codegen(CodegenContext& ctx) override;
 };
 
+class IfExprAST : public ExprAST {
+  std::unique_ptr<ExprAST> condition_;
+  std::unique_ptr<ExprAST> thenB_;
+  std::unique_ptr<ExprAST> elseB_;
+ public:
+  IfExprAST(std::unique_ptr<ExprAST> condition,
+            std::unique_ptr<ExprAST> thenB,
+            std::unique_ptr<ExprAST> elseB)
+      : condition_(std::move(condition)),
+        thenB_(std::move(thenB)),
+        elseB_(std::move(elseB)) {}
+  Value* codegen(CodegenContext& ctx) override;
+};
+
+class ForloopAST : public ExprAST {
+  std::string var_name_;
+  std::unique_ptr<ExprAST> start_, end_, step_, body_;
+ public:
+  ForloopAST(const std::string& var_name,
+             std::unique_ptr<ExprAST> start,
+             std::unique_ptr<ExprAST> end,
+             std::unique_ptr<ExprAST> step,
+             std::unique_ptr<ExprAST> body)
+      : var_name_(var_name),
+        start_(std::move(start)),
+        end_(std::move(end)),
+        step_(std::move(step)),
+        body_(std::move(body)) {}
+  Value* codegen(CodegenContext& ctx) override;
+};
+
 std::unique_ptr<ExprAST> LogError(const char* info);
 Value* LogErrorV(const char* info);
 std::unique_ptr<PrototypeAST> LogErrorP(const char* info);
@@ -122,6 +153,9 @@ class Parser {
   std::unique_ptr<PrototypeAST> ParseExtern();
   std::unique_ptr<FunctionAST> ParseDefinition();
   std::unique_ptr<FunctionAST> ParseToplevelExpr();
+
+  std::unique_ptr<ExprAST> ParseIfExpr();
+  std::unique_ptr<ExprAST> ParseForloop();
 
 #if DEBUG
   void LogInfo(const char* info);
