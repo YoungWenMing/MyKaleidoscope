@@ -17,7 +17,16 @@ class Lexer {
   
     // primary
     token_number = -4,
-    token_identifier = -5
+    token_identifier = -5,
+
+    // branch control
+    token_if = -6,
+    token_then = -7,
+    token_else = -8,
+
+    // loop control
+    token_for = -9,
+    token_in = -10
   };
 
   static void print_token(std::ostream& os, Lexer& lexer, int token);

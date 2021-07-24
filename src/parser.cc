@@ -29,8 +29,15 @@ Value* BinaryExprAST::codegen(CodegenContext& ctx) {
       return irbuilder.CreateFMul(left, right, "multmp");
     case '/':
       return irbuilder.CreateFDiv(left, right, "divtmp");
+    case '<':
+      left = irbuilder.CreateFCmpULT(left, right, "lttmp");
+      return irbuilder.CreateUIToFP(
+          left, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
+    case '>':
+      left = irbuilder.CreateFCmpUGT(left, right, "gttmp");
+      return irbuilder.CreateUIToFP(
+          left, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
     default:
-      // TODO: logerror
       return LogErrorV("Not supported binary operator.");
   }
 }
@@ -108,6 +115,121 @@ Function* FunctionAST::codegen(CodegenContext& ctx) {
   }
   func->eraseFromParent();
   return nullptr;
+}
+
+Value* IfExprAST::codegen(CodegenContext& ctx) {
+  Value* cond = condition_->codegen(ctx);
+
+  if (!cond)  return nullptr;
+
+  IRBuilder<>& builder = ctx.get_irbuilder();
+
+  cond = builder.CreateFCmpONE(
+      cond, ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), "ifcond");
+
+  Function* parenFn = builder.GetInsertBlock()->getParent();
+
+  BasicBlock* thenBB =
+      BasicBlock::Create(ctx.get_llvmcontext(), "then", parenFn);
+  BasicBlock* elseBB =
+      BasicBlock::Create(ctx.get_llvmcontext(), "else");
+  BasicBlock* mergeBB =
+      BasicBlock::Create(ctx.get_llvmcontext(), "ifcont");
+  // 1. create a condition branch selection in the current BB
+  builder.CreateCondBr(cond, thenBB, elseBB);
+  // 2. set insertPoint to thenBB which is already added to current funtion 
+  builder.SetInsertPoint(thenBB);
+
+  Value* thenV = thenB_->codegen(ctx);
+
+  // TODO: figure out that why the llvm context and builder
+  // do not need to be reset to clear the BBs
+  if (!thenV) return nullptr;
+
+  // every basic block must be terminated with a control flow instruction such as ret or branch
+  builder.CreateBr(mergeBB);
+  // the BB builder is inserting to can be changed after codegen because of potential recursion
+  thenBB = builder.GetInsertBlock();
+  // Note that elseBB is not added to parenFn during creation
+  parenFn->getBasicBlockList().push_back(elseBB);
+  builder.SetInsertPoint(elseBB);
+  Value* elseV = elseB_->codegen(ctx);
+
+  if (!elseV) return nullptr;
+  builder.CreateBr(mergeBB);
+  elseBB = builder.GetInsertBlock();
+
+  parenFn->getBasicBlockList().push_back(mergeBB);
+  builder.SetInsertPoint(mergeBB); // phi node is eventually added to mergeBB
+
+  PHINode* pn =
+      builder.CreatePHI(Type::getDoubleTy(ctx.get_llvmcontext()), 2, "iftmp");
+  pn->addIncoming(thenV, thenBB);
+  pn->addIncoming(elseV, elseBB);
+  // use Phi node to represent the value after branch under SSA
+  return pn;
+}
+
+Value* ForloopAST::codegen(CodegenContext& ctx) {
+  // create the loop variable's initial value
+  Value* start_val = start_->codegen(ctx);
+  if (!start_val) return nullptr;
+  LLVMContext& Lctx = ctx.get_llvmcontext();
+  IRBuilder<>& builder = ctx.get_irbuilder();
+
+  BasicBlock* preBB = builder.GetInsertBlock();
+  Function* parenFn = preBB->getParent();
+
+  BasicBlock* loopBB =
+      BasicBlock::Create(Lctx, "loop", parenFn);
+  
+  // this command create a br label 'loop'
+  builder.CreateBr(loopBB);
+  builder.SetInsertPoint(loopBB);
+
+  // this phi node is now inserted into the loopBB
+  PHINode* pn = builder.CreatePHI(
+      Type::getDoubleTy(Lctx), 2, var_name_.c_str());
+  // add the first branch to the phi node
+  pn->addIncoming(start_val, preBB);
+
+  // cache the old value with identical name with loop variable
+  Value* oldVal = ctx.get_valmap()[var_name_];
+  ctx.get_valmap()[var_name_] = pn;
+
+  if (!body_->codegen(ctx)) return nullptr;
+
+  Value* delta;
+  if (!step_) {
+    delta = ConstantFP::get(Lctx, APFloat(1.0));
+  } else {
+    delta = step_->codegen(ctx);
+    if (!delta) return nullptr;
+  }
+
+  Value* next = builder.CreateFAdd(pn, delta, "nextvar");
+
+  Value* end = end_->codegen(ctx);
+  if (!end)   return nullptr;
+
+
+  Value* cond = builder.CreateFCmpOEQ(
+      end, ConstantFP::get(Lctx, APFloat(1.0)), "condition");
+
+  BasicBlock* endBB = builder.GetInsertBlock();
+  BasicBlock* postBB = BasicBlock::Create(Lctx, "postloop", parenFn);
+
+  builder.CreateCondBr(cond, loopBB, postBB);
+
+  builder.SetInsertPoint(postBB);
+
+  // set the end instruction as the predecessor of this phi node
+  pn->addIncoming(next, endBB);
+
+  if (oldVal)   ctx.get_valmap()[var_name_] = oldVal;
+  else          ctx.get_valmap().erase(var_name_);
+
+  return Constant::getNullValue(Type::getDoubleTy(Lctx));
 }
 
 Parser::Parser(const char* src) :
@@ -191,6 +313,10 @@ std::unique_ptr<ExprAST> Parser::ParsePrimary() {
       return ParseIdentifierExpr();
     case '(':
       return ParseParenExpr();
+    case Lexer::token_if:
+      return ParseIfExpr();
+    case Lexer::token_for:
+      return ParseForloop();
     default:
       return LogError("[Parsing Error] unknown token when parsing an expression.");
   }
@@ -300,6 +426,82 @@ std::unique_ptr<FunctionAST> Parser::ParseToplevelExpr() {
     return std::make_unique<FunctionAST>(std::move(proto), std::move(expr));
   }
   return nullptr;
+}
+
+std::unique_ptr<ExprAST> Parser::ParseIfExpr() {
+  // eat 'if'
+  get_next_token();
+  std::unique_ptr<ExprAST> cond = ParseExpression();
+
+  if (!cond)
+    return nullptr;
+
+  if (cur_token != Lexer::token_then)
+    return LogError("[Parse Error] Expecting a 'then' keyword after 'if'");
+  
+  // eat 'then'
+  get_next_token();
+  std::unique_ptr<ExprAST> thenB = ParseExpression();
+  std::unique_ptr<ExprAST> elseB = nullptr;
+
+  if (cur_token == Lexer::token_else) {
+    // eat 'else'
+    get_next_token();
+    elseB = ParseExpression();
+  }
+
+  std::unique_ptr<IfExprAST> result =
+      std::make_unique<IfExprAST>(std::move(cond),
+                                  std::move(thenB),
+                                  std::move(elseB));
+  return std::move(result);
+}
+
+std::unique_ptr<ExprAST> Parser::ParseForloop() {
+  // eat 'for'
+  get_next_token();
+
+  if (cur_token != Lexer::token_identifier)
+    return LogError("[Parse Error] Expecting a loop variable here.");
+  
+  std::string variable_name(lexer_.identifier_str());
+  // eat variable name
+  get_next_token();
+
+  if (cur_token != '=')
+    return LogError("[Parse Error] expecting '=' after loop variable.");
+  // eat '='
+  get_next_token();
+
+  std::unique_ptr<ExprAST> start_val = ParseExpression();
+  if (start_val == nullptr)
+    return LogError("[Parse Error] Expecting primary after '='.");
+  // eat expression after '='
+  // get_next_token();
+  if (cur_token != ',')
+    return LogError("[Parse Error] Expecting ',' as a delimiter.");
+  
+  get_next_token();
+  std::unique_ptr<ExprAST> last_val = ParseExpression();
+  if (!last_val)
+    return nullptr;
+
+  std::unique_ptr<ExprAST> step = nullptr;
+  if (cur_token == ',') {
+    get_next_token();
+    step = ParseExpression();
+    if (!step)  return nullptr;
+  }
+  // eat ',' or last token of an expression
+  // get_next_token();
+  if (cur_token != Lexer::token_in)
+    LogError("[Syntax Error] keyword 'in' is necessarry in a forloop.");
+  
+  get_next_token();
+  std::unique_ptr<ExprAST> body = ParseExpression();
+  if (!body)  return nullptr;
+  return std::make_unique<ForloopAST>(variable_name,
+      std::move(start_val), std::move(last_val), std::move(step), std::move(body));
 }
 
 void Parser::ParseToplevel(std::vector<std::unique_ptr<ExprAST>>& stmts) {

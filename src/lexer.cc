@@ -56,6 +56,16 @@ int Lexer::next_token() {
       return token_def;
     if (Identifier == "extern")
       return token_extern;
+    if (Identifier == "if")
+      return token_if;
+    if (Identifier == "then")
+      return token_then;
+    if (Identifier == "else")
+      return token_else;
+    if (Identifier == "for")
+      return token_for;
+    if (Identifier == "in")
+      return token_in;
     return token_identifier;
   }
     
@@ -94,6 +104,21 @@ void Lexer::print_token(std::ostream& os, Lexer& lexer, int token) {
       break;
     case token_number:
       os << "[ Type: Primary, Value: " << lexer.number_val() << " ]";
+      break;
+    case token_if:
+      os << "[ Type: Keyword, Value: if ]";
+      break;
+    case token_then:
+      os << "[ Type: Keyword, Value: then ]";
+      break;
+    case token_else:
+      os << "[ Type: Keyword, Value: else ]";
+      break;
+    case token_for:
+      os << "[ Type: Keyword, Value: for ]";
+      break;
+    case token_in:
+      os << "[ Type: Keyword, Value: in ]";
       break;
     default:
       os << "[ Type: Unkown, Value: " << (char)token << " ]";
