@@ -75,7 +75,7 @@ class CodegenDriver {
   void HandleDefinition();
 
  public:
-  CodegenDriver(const char* src);
+  CodegenDriver(const char* src, size_t len);
 
   void run();
 };

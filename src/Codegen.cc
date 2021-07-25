@@ -6,8 +6,8 @@
 #include "llvm/Transforms/Scalar/GVN.h"
 namespace Kaleidoscope {
 
-CodegenDriver::CodegenDriver(const char* src) :
-    src_(src), ctx_(), parser_(src) {}
+CodegenDriver::CodegenDriver(const char* src, size_t len) :
+    src_(src), ctx_(), parser_(src, len) {}
 
 
 void CodegenDriver::HandleToplevelExpression() {

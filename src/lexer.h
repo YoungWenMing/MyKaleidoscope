@@ -4,11 +4,14 @@
 #include <string>
 #include <iostream>
 
+#include "src/token.h"
+
 namespace Kaleidoscope {
 
 class Lexer {
  public:
-  enum Token {
+  static const int kEndOfSource = -1;
+  enum Tokens {
     token_eof = -1,
   
   	// command
@@ -31,8 +34,7 @@ class Lexer {
 
   static void print_token(std::ostream& os, Lexer& lexer, int token);
 
-  Lexer() = delete;
-  Lexer(const char* src);
+  Lexer(const char* src, size_t len);
 
   void Reinitialize(const char* src);
 
@@ -40,24 +42,41 @@ class Lexer {
   std::string identifier_str() { return Identifier; }
   double number_val() { return NumVal; }
 
- private:
-  void advance() {
-    curChar = src_cursor_[0];
-    ++src_cursor_;
-  }
+  Token::Value NextToken();
+  double NumberVal() { return curToken.number_val; }
+  std::string& IdentifierStr() { return curToken.literal_buffer; }
 
-  void retreat() {
-    --src_cursor_;
-    curChar = src_cursor_[0];
-  }
+  void PrintCurrentToken(std::ostream&os);
+
+ private:
+  void advance();
+  struct TokenDesc {
+    double number_val;
+    std::string literal_buffer;
+    Token::Value value = Token::UNINITIALIZED;
+  };
+
+  inline void AddLiteralChar(char c);
+  inline void AddLiteralCharAdvance();
+  inline void ResetDesc();
+  inline Token::Value ScanIdentifierOrKeyword();
+  Token::Value ScanNumber();
+  Token::Value ScanSingleOp();
+
+  template<typename FunctionType>
+  inline void AdvanceUntil(FunctionType fn);
 
   const char* source_;
+  const char* src_start_;
   const char* src_cursor_;
+  const char* src_end_;
   std::string Identifier;
   double NumVal;
 
-  char curChar;
+  char c0_;
   int cur_tok;
+  TokenDesc curToken;
+
 };
 
 } // namespace Kaleidoscope
