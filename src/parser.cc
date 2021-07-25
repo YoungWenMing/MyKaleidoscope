@@ -232,8 +232,8 @@ Value* ForloopAST::codegen(CodegenContext& ctx) {
   return Constant::getNullValue(Type::getDoubleTy(Lctx));
 }
 
-Parser::Parser(const char* src) :
-    lexer_(src),
+Parser::Parser(const char* src, size_t len) :
+    lexer_(src, len),
     cur_token(0) {}
 
 int Parser::BinopPrecedency::get_precedency(char op) {

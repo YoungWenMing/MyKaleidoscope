@@ -73,6 +73,7 @@ include_directories(
 set(myparser_src
   ${CMAKE_SOURCE_DIR}/src/lexer.cc
   ${CMAKE_SOURCE_DIR}/src/lexer.h
+  ${CMAKE_SOURCE_DIR}/src/lexer-inl.h
   ${CMAKE_SOURCE_DIR}/src/parser.h
   ${CMAKE_SOURCE_DIR}/src/parser.cc
   ${CMAKE_SOURCE_DIR}/src/Codegen.h

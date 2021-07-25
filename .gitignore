@@ -6,4 +6,4 @@ Makefile
 /bin
 /build-include
 /llvm-include
-
+/trivial_test

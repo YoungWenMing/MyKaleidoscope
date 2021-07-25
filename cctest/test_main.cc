@@ -3,7 +3,9 @@
 
 #include "src/lexer.h"
 #include "src/Codegen.h"
+#include "src/token.h"
 
+using Kaleidoscope::Token;
 using Kaleidoscope::Lexer;
 using Kaleidoscope::CodegenDriver;
 
@@ -25,17 +27,20 @@ const char* readSourceFile(const char* path) {
 }
 
 void test_lexer(const char* src) {
-  Lexer lexer(src);
-  int tok;
+  Lexer lexer(src, strlen(src));
+  // int tok;
+  Token::Value tok;
   do {
-    tok = lexer.next_token();
-    Lexer::print_token(std::cout, lexer, tok);
+    tok = lexer.NextToken();
+    lexer.PrintCurrentToken(std::cout);
+    // tok = lexer.next_token();
+    // Lexer::print_token(std::cout, lexer, tok);
     std::cout << std::endl;
-  } while (tok != Lexer::token_eof);
+  } while (tok != Token::EOS);
 }
 
 void test_codegen(const char* src) {
-  CodegenDriver driver(src);
+  CodegenDriver driver(src, strlen(src));
   driver.run();
 }
 
@@ -44,8 +49,8 @@ int main(int argc, char* argv[]) {
     const char* buffer = readSourceFile(argv[1]);
 
     if (buffer && strlen(buffer) != 0) {
-      // test_lexer(buffer);
-      test_codegen(buffer);
+      test_lexer(buffer);
+      // test_codegen(buffer);
     }
   }
 	// printf("%s\n", "hello world");

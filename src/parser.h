@@ -162,7 +162,7 @@ class Parser {
 #endif
 
  public:
-  Parser(const char* src);
+  Parser(const char* src, size_t len);
 
   void ParseToplevel(std::vector<std::unique_ptr<ExprAST>>& stmts);
 
