@@ -11,6 +11,7 @@ namespace Kaleidoscope {
   T(DEF, "def", 0)                                \
   T(EXTERN, "extern", 0)                          \
   T(IF, "if", 0)                                  \
+  T(THEN, "then", 0)                              \
   T(ELSE, "else", 0)                              \
   T(FOR, "for", 0)                                \
   T(IN, "in", 0)
@@ -45,6 +46,12 @@ class Token {
 #undef VALUE_LIST
   };
 
+  static int Precedence(Value val) {
+    return precedence_[val];
+  }
+
+ private:
+  static const uint8_t precedence_[TOKEN_NUMS];
 };
 
 

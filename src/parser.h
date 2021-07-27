@@ -26,12 +26,6 @@ class CodegenContext;
 // AST Node types:
 // Expression, Variable, Number, BinaryOp, Call, Prototype, Function
 
-static LLVMContext TheContext;
-static IRBuilder<> Builder(TheContext);
-static std::unique_ptr<Module> TheModule;
-static std::map<std::string, Value*> ValMap;
-
-
 class ExprAST {
  public:
   virtual ~ExprAST() = default;
@@ -53,10 +47,10 @@ class NumberExprAST : public ExprAST {
 };
 
 class BinaryExprAST : public ExprAST {
-  char op_;
+  Token::Value op_;
   std::unique_ptr<ExprAST> lhs_, rhs_;
  public:
-  BinaryExprAST(char op, std::unique_ptr<ExprAST> lhs,
+  BinaryExprAST(Token::Value op, std::unique_ptr<ExprAST> lhs,
                 std::unique_ptr<ExprAST> rhs)
       : op_(op), lhs_(std::move(lhs)), rhs_(std::move(rhs)) {}
   Value* codegen(CodegenContext& ctx) override;
@@ -132,12 +126,12 @@ Value* LogErrorV(const char* info);
 std::unique_ptr<PrototypeAST> LogErrorP(const char* info);
 class Parser {
   Lexer lexer_;
-  int cur_token;
+  Token::Value curToken = Token::UNINITIALIZED;
 
   friend class CodegenDriver;
 
-  void get_next_token() {
-    cur_token = lexer_.next_token();
+  void getNextToken() {
+    curToken = lexer_.NextToken();
   }
 
   std::unique_ptr<ExprAST> ParseExpression();
@@ -166,10 +160,6 @@ class Parser {
 
   void ParseToplevel(std::vector<std::unique_ptr<ExprAST>>& stmts);
 
-  class BinopPrecedency {
-   public:
-    static int get_precedency(char op);
-  };
 };
 
 } // Kaleidoscope
