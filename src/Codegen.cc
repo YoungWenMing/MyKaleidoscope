@@ -1,5 +1,6 @@
 
 #include "src/Codegen.h"
+#include "src/token.h"
 
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
@@ -7,7 +8,7 @@
 namespace Kaleidoscope {
 
 CodegenDriver::CodegenDriver(const char* src, size_t len) :
-    src_(src), ctx_(), parser_(src, len) {}
+    src_(src), parser_(src, len), ctx_() {}
 
 
 void CodegenDriver::HandleToplevelExpression() {
@@ -23,7 +24,7 @@ void CodegenDriver::HandleToplevelExpression() {
 
     // remove the anonymous expression
   } else {
-    parser_.get_next_token();
+    parser_.getNextToken();
   }
 }
 
@@ -38,7 +39,7 @@ void CodegenDriver::HandleExtern() {
     // record the prototype in Codegen Context
     ctx_.add_protos(std::move(externAst));
   } else {
-    parser_.get_next_token();
+    parser_.getNextToken();
   }
 }
 
@@ -53,22 +54,22 @@ void CodegenDriver::HandleDefinition() {
 
     ctx_.add_module();
   } else {
-    parser_.get_next_token();
+    parser_.getNextToken();
   }
 }
 
 void CodegenDriver::run() {
-  parser_.get_next_token();
-  while (parser_.cur_token != Lexer::token_eof) {
-    switch(parser_.cur_token) {
-      case Lexer::token_def:
+  parser_.getNextToken();
+  while (parser_.curToken != Token::EOS) {
+    switch(parser_.curToken) {
+      case Token::DEF:
         HandleDefinition();
         break;
-      case Lexer::token_extern:
+      case Token::EXTERN:
         HandleExtern();
         break;
-      case ';':
-        parser_.get_next_token();
+      case Token::SEMICOLON:
+        parser_.getNextToken();
         break;
       default:
         HandleToplevelExpression();

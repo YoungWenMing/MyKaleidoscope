@@ -49,8 +49,8 @@ int main(int argc, char* argv[]) {
     const char* buffer = readSourceFile(argv[1]);
 
     if (buffer && strlen(buffer) != 0) {
-      test_lexer(buffer);
-      // test_codegen(buffer);
+      // test_lexer(buffer);
+      test_codegen(buffer);
     }
   }
 	// printf("%s\n", "hello world");
