@@ -23,6 +23,7 @@ using namespace llvm;
 
 class CodegenContext;
 
+typedef std::map<Token::Value, int> PreceMap;
 // AST Node types:
 // Expression, Variable, Number, BinaryOp, Call, Prototype, Function
 
@@ -56,6 +57,15 @@ class BinaryExprAST : public ExprAST {
   Value* codegen(CodegenContext& ctx) override;
 };
 
+class UnaryExprAST : public ExprAST {
+  Token::Value op_;
+  std::unique_ptr<ExprAST> val_;
+ public:
+  UnaryExprAST(Token::Value op, std::unique_ptr<ExprAST> val)
+    : op_(op), val_(std::move(val)) {}
+  Value* codegen(CodegenContext& ctx) override;
+};
+
 class CallExprAST : public ExprAST {
   std::string callee_;
   std::vector<std::unique_ptr<ExprAST> > args_;
@@ -69,15 +79,40 @@ class CallExprAST : public ExprAST {
 class PrototypeAST : public ExprAST {
   std::string name_;
   std::vector<std::string> args_;
+  // store operator info and precedence
+  uint32_t flags = 0;
+  static constexpr int kPrecedenceOffset = 8;
+  static constexpr int kTokenValueOffset = 16;
 
  public:
   PrototypeAST(const std::string& name,
                std::vector<std::string> args)
       : name_(name), args_(std::move(args)) {}
-  std::string getName() {
+  
+  PrototypeAST(const std::string& name,
+               std::vector<std::string> args,
+               uint32_t precedence, Token::Value token)
+      : name_(name),
+        args_(args) {
+    flags = ((precedence & 0xFF) << kPrecedenceOffset) & 1;
+    flags |= (token & 0xFF) << kTokenValueOffset;
+  }
+
+  std::string& getName() {
     return name_;
   }
   Function* codegen(CodegenContext& ctx) override;
+
+  bool isOperator() const { return flags & 0xFF; }
+  // we only support one-char operator currently
+  Token::Value getOperator() const {
+    assert(isOperator());
+    return static_cast<Token::Value>((flags >> kTokenValueOffset) & 0xFF);
+  }
+  bool isBinaryOp() const { return isOperator() && args_.size() == 2; }
+  bool isUnaryOp() const { return isOperator() && args_.size() == 1; }
+  uint32_t getPrecedence() const { return (flags >> kPrecedenceOffset) & 0xFF; }
+
 };
 
 class FunctionAST : public ExprAST {
@@ -127,11 +162,17 @@ std::unique_ptr<PrototypeAST> LogErrorP(const char* info);
 class Parser {
   Lexer lexer_;
   Token::Value curToken = Token::UNINITIALIZED;
+  PreceMap preceMap;
 
   friend class CodegenDriver;
 
   void getNextToken() {
     curToken = lexer_.NextToken();
+  }
+
+  int getOpsPrecedence(Token::Value token);
+  void setOpsPrecedence(Token::Value token, uint32_t prece) {
+    preceMap[token] = prece;
   }
 
   std::unique_ptr<ExprAST> ParseExpression();
@@ -142,6 +183,7 @@ class Parser {
 
   std::unique_ptr<ExprAST> ParseBinopRhs(
       int last_prec, std::unique_ptr<ExprAST> lhs);
+  std::unique_ptr<ExprAST> ParseUnaryExpr();
 
   std::unique_ptr<PrototypeAST> ParsePrototype();
   std::unique_ptr<PrototypeAST> ParseExtern();

@@ -20,6 +20,7 @@ void Lexer::Reinitialize(const char* src) {
 }
 
 Token::Value Lexer::NextToken() {
+  ResetDesc();
   while (isspace(c0_))  advance();
 
   if (isdigit(c0_)) {
@@ -44,7 +45,6 @@ Token::Value Lexer::NextToken() {
 }
 
 Token::Value Lexer::ScanNumber() {
-  ResetDesc();
   AddLiteralCharAdvance();
   // we only support decimal number here
   uint8_t dot_num = 0;
@@ -58,6 +58,7 @@ Token::Value Lexer::ScanNumber() {
 }
 
 Token::Value Lexer::ScanSingleOp() {
+  AddLiteralChar(c0_);
   switch (c0_) {
     case '+':
       return Token::ADD;
@@ -81,6 +82,12 @@ Token::Value Lexer::ScanSingleOp() {
       return Token::COMMA;
     case '=':
       return Token::ASSIGN;
+    case '|':
+      return Token::OR;
+    case '&':
+      return Token::AND;
+    case '!':
+      return Token::NOT;
     default:
       return Token::ILLEGAL;
   }

@@ -8,7 +8,7 @@
 namespace Kaleidoscope {
 
 CodegenDriver::CodegenDriver(const char* src, size_t len) :
-    src_(src), ctx_(), parser_(src, len) {}
+    src_(src), parser_(src, len), ctx_() {}
 
 
 void CodegenDriver::HandleToplevelExpression() {

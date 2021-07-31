@@ -38,8 +38,25 @@ Value* BinaryExprAST::codegen(CodegenContext& ctx) {
       return irbuilder.CreateUIToFP(
           left, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
     default:
-      return LogErrorV("Not supported binary operator.");
+      break;
   }
+  // consider user-defined operators
+  std::string opFnName("binary");
+  opFnName.append(Token::TokenName(op_));
+
+  Function* opFn = ctx.get_function(opFnName);
+  assert(opFn && " binary operation definition not found.");
+  return ctx.get_irbuilder().CreateCall(opFn, {left, right}, "optmp");
+}
+
+Value* UnaryExprAST::codegen(CodegenContext& ctx) {
+  std::string opFnName("unary");
+  opFnName.append(Token::TokenName(op_));
+  Function* opFn = ctx.get_function(opFnName);
+  assert(opFn && " unary operation not defined.");
+  
+  Value* operand =val_->codegen(ctx);
+  return ctx.get_irbuilder().CreateCall(opFn, {operand}, "unarytmp");
 }
 
 Value* CallExprAST::codegen(CodegenContext& ctx) {
@@ -235,6 +252,14 @@ Value* ForloopAST::codegen(CodegenContext& ctx) {
 Parser::Parser(const char* src, size_t len) :
     lexer_(src, len) {}
 
+int Parser::getOpsPrecedence(Token::Value token) {
+  auto entry = preceMap.find(token);
+  if (entry != preceMap.end()) {
+    return entry->second;
+  }
+  return Token::Precedence(token);
+}
+
 std::unique_ptr<NumberExprAST> Parser::ParseNumberExpr() {
   std::unique_ptr<NumberExprAST> result =
       std::make_unique<NumberExprAST>(lexer_.NumberVal());
@@ -308,7 +333,7 @@ std::unique_ptr<ExprAST> Parser::ParseBinopRhs(
     int last_prec, std::unique_ptr<ExprAST> lhs) {
   while (true) {
     // curToken is one binary operator now
-    int cur_prec = Token::Precedence(curToken);
+    int cur_prec = getOpsPrecedence(curToken);
     // next operator has lower precedency
     // return lhs directly
     // e.g.  1 * 4 + 3
@@ -320,11 +345,12 @@ std::unique_ptr<ExprAST> Parser::ParseBinopRhs(
     getNextToken();
 
     // parse the next primary expression first
-    std::unique_ptr<ExprAST> rhs = ParsePrimary();
+    // 1 + +3 or 1 + -3 is also valid
+    std::unique_ptr<ExprAST> rhs = ParseUnaryExpr();
     if (rhs == nullptr)
       return LogError("[Parsing Error] Expecting a primary expression.");
 
-    int next_prec = Token::Precedence(curToken);
+    int next_prec = getOpsPrecedence(curToken);
 
     // if next operator has higher precedency
     // the right will be parsed as a whole entity,
@@ -339,8 +365,22 @@ std::unique_ptr<ExprAST> Parser::ParseBinopRhs(
   }
 }
 
+/// unary
+///   ::= primary
+///   ::= '!' unary
+std::unique_ptr<ExprAST> Parser::ParseUnaryExpr() {
+  if (!Token::IsUnaryOp(curToken))  return ParsePrimary();
+
+  Token::Value op = curToken;
+  getNextToken();
+  if (auto val = ParseUnaryExpr()) {
+    return std::make_unique<UnaryExprAST>(op, std::move(val));
+  }
+  return nullptr;
+}
+
 std::unique_ptr<ExprAST> Parser::ParseExpression() {
-  std::unique_ptr<ExprAST> lhs = ParsePrimary();
+  std::unique_ptr<ExprAST> lhs = ParseUnaryExpr();
   if (!lhs)   return lhs;
   return ParseBinopRhs(0, std::move(lhs));
 }
@@ -348,12 +388,35 @@ std::unique_ptr<ExprAST> Parser::ParseExpression() {
 // prototype
 //   ::= id '(' id* ')'
 std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
-  if (curToken != Token::IDENTIFIER)
-    return LogErrorP("[Parsing Error] Expecting an identifier here.");
+  bool isOp = false;
+  if (curToken != Token::IDENTIFIER) {
+    if (curToken == Token::BINARY || curToken == Token::UNARY)
+      isOp = true;
+    else
+      return LogErrorP("[Parsing Error] Expecting an identifier here.");
+  }
 
   std::string FnName(lexer_.IdentifierStr());
-  // eat the file name idenrifier
+  int precedence = -1;
+  Token::Value Op = Token::ILLEGAL;
+  // eat the function name idenrifier
   getNextToken();
+  if (isOp) {
+    // append the operator char
+    Op = curToken;
+    FnName.append(lexer_.IdentifierStr());
+    // FnName.append(Token::TokenName(Op));
+    getNextToken();
+    if (FnName.front() == 'b') {
+      // get the precedence for binary operator
+      if (curToken != Token::NUMBER)
+        return LogErrorP("[Parsing Error] Expecting a number for binary operator's precedence.");
+      precedence = static_cast<int>(lexer_.NumberVal());
+      setOpsPrecedence(Op, precedence);
+      assert(precedence >= 0 && "Precedence can only be a non-negative integers.");
+      getNextToken();
+    }
+  }
 
   if (curToken != Token::LPAREN)
     return LogErrorP("[Parsing Error] Expecting a left parenthesis '(' here.");
@@ -375,9 +438,10 @@ std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
     return LogErrorP("[Parsing Error] Expecting an identifier here.");
   // eat ')'
   getNextToken();
-  return std::make_unique<PrototypeAST>(FnName, args_);
+  return precedence != -1? 
+            std::make_unique<PrototypeAST>(FnName, args_, precedence, Op) :
+            std::make_unique<PrototypeAST>(FnName, args_);
 }
-
 
 std::unique_ptr<FunctionAST> Parser::ParseDefinition() {
   // eat 'def'
