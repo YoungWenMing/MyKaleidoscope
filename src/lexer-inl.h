@@ -9,6 +9,8 @@ namespace Kaleidoscope {
 typedef std::unordered_map<std::string, Token::Value> TokenMap;
 
 #define KEYWORDS(S, G)              \
+  G('b')                            \
+  S("binary")                       \
   G('d')                            \
   S("def")                          \
   G('e')                            \
@@ -20,7 +22,9 @@ typedef std::unordered_map<std::string, Token::Value> TokenMap;
   S("if")                           \
   S("in")                           \
   G('t')                            \
-  S("then")
+  S("then")                         \
+  G('u')                            \
+  S("unary")
 
 
 template<int N>
@@ -169,7 +173,6 @@ void Lexer::ResetDesc() {
 }
 
 Token::Value Lexer::ScanIdentifierOrKeyword() {
-  ResetDesc();
   uint8_t flags = char_lex_flags[c0_];
   AddLiteralChar(c0_);
   AdvanceUntil([this, &flags](char c){

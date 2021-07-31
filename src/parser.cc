@@ -20,26 +20,43 @@ Value* BinaryExprAST::codegen(CodegenContext& ctx) {
   Value* left = lhs_->codegen(ctx), *right = rhs_->codegen(ctx);
   IRBuilder<>& irbuilder = ctx.get_irbuilder();
   switch(op_) {
-    case '+':
+    case Token::ADD:
       // create float add
       return irbuilder.CreateFAdd(left, right, "addtmp");
-    case '-':
+    case Token::SUB:
       return irbuilder.CreateFSub(left, right, "subtmp");
-    case '*':
+    case Token::MUL:
       return irbuilder.CreateFMul(left, right, "multmp");
-    case '/':
+    case Token::DIV:
       return irbuilder.CreateFDiv(left, right, "divtmp");
-    case '<':
+    case Token::LT:
       left = irbuilder.CreateFCmpULT(left, right, "lttmp");
       return irbuilder.CreateUIToFP(
           left, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
-    case '>':
+    case Token::GT:
       left = irbuilder.CreateFCmpUGT(left, right, "gttmp");
       return irbuilder.CreateUIToFP(
           left, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
     default:
-      return LogErrorV("Not supported binary operator.");
+      break;
   }
+  // consider user-defined operators
+  std::string opFnName("binary");
+  opFnName.append(Token::TokenName(op_));
+
+  Function* opFn = ctx.get_function(opFnName);
+  assert(opFn && " binary operation definition not found.");
+  return ctx.get_irbuilder().CreateCall(opFn, {left, right}, "optmp");
+}
+
+Value* UnaryExprAST::codegen(CodegenContext& ctx) {
+  std::string opFnName("unary");
+  opFnName.append(Token::TokenName(op_));
+  Function* opFn = ctx.get_function(opFnName);
+  assert(opFn && " unary operation not defined.");
+  
+  Value* operand =val_->codegen(ctx);
+  return ctx.get_irbuilder().CreateCall(opFn, {operand}, "unarytmp");
 }
 
 Value* CallExprAST::codegen(CodegenContext& ctx) {
@@ -233,45 +250,36 @@ Value* ForloopAST::codegen(CodegenContext& ctx) {
 }
 
 Parser::Parser(const char* src, size_t len) :
-    lexer_(src, len),
-    cur_token(0) {}
+    lexer_(src, len) {}
 
-int Parser::BinopPrecedency::get_precedency(char op) {
-  switch (op) {
-    case '<':
-    case '>':
-      return 1;
-    case '-':
-    case '+':
-      return 2;
-    case '*':
-    case '/':
-      return 3;
-    default:
-      return -1;
+int Parser::getOpsPrecedence(Token::Value token) {
+  auto entry = preceMap.find(token);
+  if (entry != preceMap.end()) {
+    return entry->second;
   }
+  return Token::Precedence(token);
 }
 
 std::unique_ptr<NumberExprAST> Parser::ParseNumberExpr() {
   std::unique_ptr<NumberExprAST> result =
-      std::make_unique<NumberExprAST>(lexer_.number_val());
-  cur_token = lexer_.next_token();
+      std::make_unique<NumberExprAST>(lexer_.NumberVal());
+  getNextToken();
   return result;
 }
 
 std::unique_ptr<ExprAST> Parser::ParseIdentifierExpr() {
   // handles simple identifiers and function calls
-  std::string id = lexer_.identifier_str();
+  std::string id = lexer_.IdentifierStr();
 
-  get_next_token();
-  if (cur_token != '(') {
+  getNextToken();
+  if (curToken != Token::LPAREN) {
     return std::make_unique<VariableExprAST>(id);
   }
 
   // handle the function call cases
-  get_next_token();
+  getNextToken();
   std::vector<std::unique_ptr<ExprAST>> args;
-  if (cur_token != ')') {
+  if (curToken != Token::RPAREN) {
     while (true) {
       if (auto arg = ParseExpression()) {
         args.push_back(std::move(arg));
@@ -280,42 +288,41 @@ std::unique_ptr<ExprAST> Parser::ParseIdentifierExpr() {
         return nullptr;
       }
       
-      if (cur_token == ')')
+      if (curToken == Token::RPAREN)
         break;
 
-      if (cur_token != ',') {
-        // LogError
+      if (curToken != Token::COMMA)
         return nullptr;
-      }
-      get_next_token();
+
+      getNextToken();
     }
   }
-  get_next_token();
+  getNextToken();
   return std::make_unique<CallExprAST>(id, std::move(args));
 }
 
 std::unique_ptr<ExprAST> Parser::ParseParenExpr() {
-  get_next_token();  // eat '('
+  getNextToken();
   auto expr = ParseExpression();
 
-  if (cur_token != ')')
+  if (curToken != Token::RPAREN)
     return LogError("[Parsing Error] Expecting a ')'.");
 
-  get_next_token();  // eat ')'
+  getNextToken();
   return expr;
 }
 
 std::unique_ptr<ExprAST> Parser::ParsePrimary() {
-  switch (cur_token) {
-    case Lexer::token_number:
+  switch (curToken) {
+    case Token::NUMBER:
       return ParseNumberExpr();
-    case Lexer::token_identifier:
+    case Token::IDENTIFIER:
       return ParseIdentifierExpr();
-    case '(':
+    case Token::LPAREN:
       return ParseParenExpr();
-    case Lexer::token_if:
+    case Token::IF:
       return ParseIfExpr();
-    case Lexer::token_for:
+    case Token::FOR:
       return ParseForloop();
     default:
       return LogError("[Parsing Error] unknown token when parsing an expression.");
@@ -325,24 +332,25 @@ std::unique_ptr<ExprAST> Parser::ParsePrimary() {
 std::unique_ptr<ExprAST> Parser::ParseBinopRhs(
     int last_prec, std::unique_ptr<ExprAST> lhs) {
   while (true) {
-    // cur_token is one binary operator now
-    int cur_prec = BinopPrecedency::get_precedency(cur_token);
+    // curToken is one binary operator now
+    int cur_prec = getOpsPrecedence(curToken);
     // next operator has lower precedency
     // return lhs directly
     // e.g.  1 * 4 + 3
     // last operator is '*', the current operator is '+'
     if (cur_prec <= last_prec)  return lhs;
 
-    char cur_op = cur_token;
+    Token::Value cur_op = curToken;
     // eat this binary operator
-    get_next_token();
+    getNextToken();
 
     // parse the next primary expression first
-    std::unique_ptr<ExprAST> rhs = ParsePrimary();
+    // 1 + +3 or 1 + -3 is also valid
+    std::unique_ptr<ExprAST> rhs = ParseUnaryExpr();
     if (rhs == nullptr)
       return LogError("[Parsing Error] Expecting a primary expression.");
 
-    int next_prec = BinopPrecedency::get_precedency(cur_token);
+    int next_prec = getOpsPrecedence(curToken);
 
     // if next operator has higher precedency
     // the right will be parsed as a whole entity,
@@ -357,8 +365,22 @@ std::unique_ptr<ExprAST> Parser::ParseBinopRhs(
   }
 }
 
+/// unary
+///   ::= primary
+///   ::= '!' unary
+std::unique_ptr<ExprAST> Parser::ParseUnaryExpr() {
+  if (!Token::IsUnaryOp(curToken))  return ParsePrimary();
+
+  Token::Value op = curToken;
+  getNextToken();
+  if (auto val = ParseUnaryExpr()) {
+    return std::make_unique<UnaryExprAST>(op, std::move(val));
+  }
+  return nullptr;
+}
+
 std::unique_ptr<ExprAST> Parser::ParseExpression() {
-  std::unique_ptr<ExprAST> lhs = ParsePrimary();
+  std::unique_ptr<ExprAST> lhs = ParseUnaryExpr();
   if (!lhs)   return lhs;
   return ParseBinopRhs(0, std::move(lhs));
 }
@@ -366,40 +388,64 @@ std::unique_ptr<ExprAST> Parser::ParseExpression() {
 // prototype
 //   ::= id '(' id* ')'
 std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
-  if (cur_token != Lexer::token_identifier)
-    return LogErrorP("[Parsing Error] Expecting an identifier here.");
+  bool isOp = false;
+  if (curToken != Token::IDENTIFIER) {
+    if (curToken == Token::BINARY || curToken == Token::UNARY)
+      isOp = true;
+    else
+      return LogErrorP("[Parsing Error] Expecting an identifier here.");
+  }
 
-  std::string FnName(lexer_.identifier_str());
-  // eat the file name idenrifier
-  get_next_token();
+  std::string FnName(lexer_.IdentifierStr());
+  int precedence = -1;
+  Token::Value Op = Token::ILLEGAL;
+  // eat the function name idenrifier
+  getNextToken();
+  if (isOp) {
+    // append the operator char
+    Op = curToken;
+    FnName.append(lexer_.IdentifierStr());
+    // FnName.append(Token::TokenName(Op));
+    getNextToken();
+    if (FnName.front() == 'b') {
+      // get the precedence for binary operator
+      if (curToken != Token::NUMBER)
+        return LogErrorP("[Parsing Error] Expecting a number for binary operator's precedence.");
+      precedence = static_cast<int>(lexer_.NumberVal());
+      setOpsPrecedence(Op, precedence);
+      assert(precedence >= 0 && "Precedence can only be a non-negative integers.");
+      getNextToken();
+    }
+  }
 
-  if (cur_token != '(')
+  if (curToken != Token::LPAREN)
     return LogErrorP("[Parsing Error] Expecting a left parenthesis '(' here.");
 
   // eat the left parenthesis of function def
-  get_next_token();
+  getNextToken();
 
   std::vector<std::string> args_;
-  while (cur_token == Lexer::token_identifier) {
-    args_.push_back(lexer_.identifier_str());
-    get_next_token();
+  while (curToken == Token::IDENTIFIER) {
+    args_.push_back(lexer_.IdentifierStr());
+    getNextToken();
 
     // eat comma directly
-    if (cur_token == ',')
-      get_next_token();
+    if (curToken == Token::COMMA)
+      getNextToken();
   }
 
-  if (cur_token != ')')
+  if (curToken != Token::RPAREN)
     return LogErrorP("[Parsing Error] Expecting an identifier here.");
   // eat ')'
-  get_next_token();
-  return std::make_unique<PrototypeAST>(FnName, args_);
+  getNextToken();
+  return precedence != -1? 
+            std::make_unique<PrototypeAST>(FnName, args_, precedence, Op) :
+            std::make_unique<PrototypeAST>(FnName, args_);
 }
-
 
 std::unique_ptr<FunctionAST> Parser::ParseDefinition() {
   // eat 'def'
-  get_next_token();
+  getNextToken();
   // get prototype
   std::unique_ptr<PrototypeAST> proto = ParsePrototype();
   if (!proto)
@@ -412,7 +458,7 @@ std::unique_ptr<FunctionAST> Parser::ParseDefinition() {
 
 std::unique_ptr<PrototypeAST> Parser::ParseExtern() {
   // eat 'extern'
-  get_next_token();
+  getNextToken();
   // get prototype
   std::unique_ptr<PrototypeAST> proto = ParsePrototype();
   return proto;
@@ -430,23 +476,23 @@ std::unique_ptr<FunctionAST> Parser::ParseToplevelExpr() {
 
 std::unique_ptr<ExprAST> Parser::ParseIfExpr() {
   // eat 'if'
-  get_next_token();
+  getNextToken();
   std::unique_ptr<ExprAST> cond = ParseExpression();
 
   if (!cond)
     return nullptr;
 
-  if (cur_token != Lexer::token_then)
+  if (curToken != Token::THEN)
     return LogError("[Parse Error] Expecting a 'then' keyword after 'if'");
   
   // eat 'then'
-  get_next_token();
+  getNextToken();
   std::unique_ptr<ExprAST> thenB = ParseExpression();
   std::unique_ptr<ExprAST> elseB = nullptr;
 
-  if (cur_token == Lexer::token_else) {
+  if (curToken == Token::ELSE) {
     // eat 'else'
-    get_next_token();
+    getNextToken();
     elseB = ParseExpression();
   }
 
@@ -459,45 +505,43 @@ std::unique_ptr<ExprAST> Parser::ParseIfExpr() {
 
 std::unique_ptr<ExprAST> Parser::ParseForloop() {
   // eat 'for'
-  get_next_token();
+  getNextToken();
 
-  if (cur_token != Lexer::token_identifier)
+  if (curToken != Token::IDENTIFIER)
     return LogError("[Parse Error] Expecting a loop variable here.");
   
-  std::string variable_name(lexer_.identifier_str());
+  std::string variable_name(lexer_.IdentifierStr());
   // eat variable name
-  get_next_token();
+  getNextToken();
 
-  if (cur_token != '=')
+  if (curToken != Token::ASSIGN)
     return LogError("[Parse Error] expecting '=' after loop variable.");
   // eat '='
-  get_next_token();
+  getNextToken();
 
   std::unique_ptr<ExprAST> start_val = ParseExpression();
   if (start_val == nullptr)
     return LogError("[Parse Error] Expecting primary after '='.");
   // eat expression after '='
-  // get_next_token();
-  if (cur_token != ',')
+  if (curToken != Token::COMMA)
     return LogError("[Parse Error] Expecting ',' as a delimiter.");
   
-  get_next_token();
+  getNextToken();
   std::unique_ptr<ExprAST> last_val = ParseExpression();
   if (!last_val)
     return nullptr;
 
   std::unique_ptr<ExprAST> step = nullptr;
-  if (cur_token == ',') {
-    get_next_token();
+  if (curToken == Token::COMMA) {
+    getNextToken();
     step = ParseExpression();
     if (!step)  return nullptr;
   }
   // eat ',' or last token of an expression
-  // get_next_token();
-  if (cur_token != Lexer::token_in)
+  if (curToken != Token::IN)
     LogError("[Syntax Error] keyword 'in' is necessarry in a forloop.");
   
-  get_next_token();
+  getNextToken();
   std::unique_ptr<ExprAST> body = ParseExpression();
   if (!body)  return nullptr;
   return std::make_unique<ForloopAST>(variable_name,
@@ -505,20 +549,20 @@ std::unique_ptr<ExprAST> Parser::ParseForloop() {
 }
 
 void Parser::ParseToplevel(std::vector<std::unique_ptr<ExprAST>>& stmts) {
-  get_next_token();
+  getNextToken();
   std::unique_ptr<ExprAST> res;
-  while (cur_token != Lexer::token_eof) {
-    switch (cur_token) {
-      case Lexer::token_def:
+  while (curToken != Token::EOS) {
+    switch (curToken) {
+      case Token::DEF:
         res = ParseDefinition();
         stmts.push_back(std::move(res));
         break;
-      case Lexer::token_extern:
+      case Token::EXTERN:
         res = ParseExtern();
         stmts.push_back(std::move(res));
-      case ';':
+      case Token::SEMICOLON:
         // eat directly
-        get_next_token();
+        getNextToken();
         break;
       default:
         res = ParseExpression();

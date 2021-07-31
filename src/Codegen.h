@@ -18,6 +18,9 @@ namespace Kaleidoscope {
 using namespace llvm;
 using namespace llvm::orc;
 
+typedef
+std::map<Token::Value, std::unique_ptr<PrototypeAST>> OpProtoMap;
+
 class CodegenContext {
   std::unique_ptr<LLVMContext> TheContext;
   std::unique_ptr<Module> TheModule;
@@ -31,6 +34,9 @@ class CodegenContext {
 
   // for function code regeneration
   std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
+  // for user-defined operators
+  // OpProtoMap OpProtos;
+  // Parser* const parser_;
 
  public:
   CodegenContext() {
@@ -67,8 +73,8 @@ class CodegenContext {
 
 class CodegenDriver {
   const char* src_;
-  CodegenContext ctx_;
   Parser parser_;
+  CodegenContext ctx_;
 
   void HandleToplevelExpression();
   void HandleExtern();
