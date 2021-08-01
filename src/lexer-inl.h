@@ -24,7 +24,9 @@ typedef std::unordered_map<std::string, Token::Value> TokenMap;
   G('t')                            \
   S("then")                         \
   G('u')                            \
-  S("unary")
+  S("unary")                        \
+  G('v')                            \
+  S("var")
 
 
 template<int N>

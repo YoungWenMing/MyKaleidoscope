@@ -5,6 +5,7 @@
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Utils.h"
 namespace Kaleidoscope {
 
 CodegenDriver::CodegenDriver(const char* src, size_t len) :
@@ -88,6 +89,7 @@ void CodegenContext::InitializeModuleAndPassManager() {
 
   TheFPM = std::make_unique<llvm::legacy::FunctionPassManager>(TheModule.get());
 
+  TheFPM->add(createPromoteMemoryToRegisterPass());
   TheFPM->add(createInstructionCombiningPass());
   TheFPM->add(createReassociatePass());
   TheFPM->add(createGVNPass());
@@ -142,6 +144,13 @@ void CodegenContext::add_module() {
   ExitOnErr(TheJIT->addModule(
       ThreadSafeModule(std::move(TheModule), std::move(TheContext))));
   InitializeModuleAndPassManager();
+}
+
+AllocaInst* CodegenContext::CreateEntryBlockAlloca(
+    Function* func, const std::string& var_name) {
+  IRBuilder<> tempB(&func->getEntryBlock(), func->getEntryBlock().begin());
+  return tempB.CreateAlloca(
+      Type::getDoubleTy(*TheContext), 0, var_name.c_str());
 }
 
 // Question:
