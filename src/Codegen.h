@@ -25,7 +25,7 @@ class CodegenContext {
   std::unique_ptr<LLVMContext> TheContext;
   std::unique_ptr<Module> TheModule;
   std::unique_ptr<IRBuilder<>> Builder;
-  std::map<std::string, Value*> ValMap;
+  std::map<std::string, AllocaInst*> ValMap;
 
   // for code optimization
   std::unique_ptr<legacy::FunctionPassManager> TheFPM;
@@ -56,7 +56,7 @@ class CodegenContext {
 
   Module* get_moduleptr() { return TheModule.get(); }
 
-  std::map<std::string, Value*>& get_valmap() { return ValMap; }
+  std::map<std::string, AllocaInst*>& get_valmap() { return ValMap; }
 
   void InitializeModuleAndPassManager();
 
@@ -69,6 +69,9 @@ class CodegenContext {
   void add_protos(std::unique_ptr<PrototypeAST> proto);
 
   void add_module();
+
+  AllocaInst* CreateEntryBlockAlloca(
+      Function* func, const std::string& var_name);
 };
 
 class CodegenDriver {

@@ -17,7 +17,8 @@ namespace Kaleidoscope {
   T(FOR, "for", 0)                                \
   T(IN, "in", 0)                                  \
   T(UNARY, "unary", 0)                            \
-  T(BINARY, "binary", 0)
+  T(BINARY, "binary", 0)                          \
+  T(VAR, "var", 0)
 
 #define BINARY_OP_LIST(T)                         \
   T(MUL, "*", 7)                                  \
@@ -37,7 +38,7 @@ namespace Kaleidoscope {
   T(RPAREN, ")", 0)                               \
   T(SEMICOLON, ";", 0)                            \
   T(COMMA, ",", 0)                                \
-  T(ASSIGN, "=", 0)                               \
+  T(ASSIGN, "=", 1)                               \
   T(NUMBER, nullptr, 0)                           \
   T(IDENTIFIER, nullptr, 0)                       \
   KEYWORD_LIST(T)                                 \

@@ -13,10 +13,24 @@ Value* VariableExprAST::codegen(CodegenContext& ctx) {
   Value* val = ctx.get_valmap()[name_];
   if (!val)
       return LogErrorV("variable is not defined.");
-  return val;
+  return ctx.get_irbuilder().CreateLoad(val, name_.c_str());
 }
 
 Value* BinaryExprAST::codegen(CodegenContext& ctx) {
+  if (op_ == Token::ASSIGN) {
+    assert(lhs_->getType() == ExprAST::kVariableExpr);
+    VariableExprAST* vlhs = static_cast<VariableExprAST*>(lhs_.get());
+
+    AllocaInst* allo = ctx.get_valmap()[vlhs->varName()];
+    if (allo == nullptr)
+      return LogErrorV("Unknown variable name.");
+
+    Value* r = rhs_->codegen(ctx);
+    if (r == nullptr) return nullptr;
+
+    ctx.get_irbuilder().CreateStore(r, allo);
+    return r;
+  }
   Value* left = lhs_->codegen(ctx), *right = rhs_->codegen(ctx);
   IRBuilder<>& irbuilder = ctx.get_irbuilder();
   switch(op_) {
@@ -57,6 +71,44 @@ Value* UnaryExprAST::codegen(CodegenContext& ctx) {
   
   Value* operand =val_->codegen(ctx);
   return ctx.get_irbuilder().CreateCall(opFn, {operand}, "unarytmp");
+}
+
+Value* UnaryOperation::codegen(CodegenContext& ctx) {
+  Value* target = operand_->codegen(ctx);
+  if (target == nullptr)
+    return nullptr;
+
+  // we can only get SUB or ADD here.
+  if (op_ == Token::SUB) {
+    Value* zero = ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0));
+    return ctx.get_irbuilder().CreateFSub(zero, target, "unatmp");
+  }
+  return target;
+}
+
+Value* VariableDeclaration::codegen(CodegenContext& ctx) {
+  IRBuilder<>& builder = ctx.get_irbuilder();
+  Function* parenFn = builder.GetInsertBlock()->getParent();
+  auto nameMap = ctx.get_valmap();
+
+  for (auto& p : initList) {
+    std::string& varName = p.first;
+    AllocaInst* allo = ctx.CreateEntryBlockAlloca(parenFn, varName);
+
+    Value* initVal;
+    if (p.second) {
+      initVal = p.second->codegen(ctx);
+      if (initVal == nullptr)
+        return nullptr;
+    } else {
+      initVal = ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0));
+    }
+    builder.CreateStore(initVal, allo);
+    // TODO: add checking for duplicate variable declaration.
+    nameMap[varName] = allo;
+  }
+  // variable declarations do not have any nontrivial value
+  return ConstantFP::get(Type::getDoubleTy(ctx.get_llvmcontext()), APFloat(0.0));
 }
 
 Value* CallExprAST::codegen(CodegenContext& ctx) {
@@ -114,13 +166,18 @@ Function* FunctionAST::codegen(CodegenContext& ctx) {
   
   BasicBlock* BB = BasicBlock::Create(ctx.get_llvmcontext(), "entry", func);
   // make BB the next insertion place
-  ctx.get_irbuilder().SetInsertPoint(BB);
+  IRBuilder<>& builder = ctx.get_irbuilder();
+  builder.SetInsertPoint(BB);
 
   // make the ValMap current context
   auto & val_map = ctx.get_valmap();
   val_map.clear();
-  for(auto & arg : func->args())
-    val_map[arg.getName().str()] = &arg;
+  for(auto & arg : func->args()) {
+    std::string arg_name = arg.getName().str();
+    AllocaInst* allo = ctx.CreateEntryBlockAlloca(func, arg_name);
+    builder.CreateStore(&arg, allo);
+    val_map[arg_name] = allo;
+  }
   
   if (Value* retVal = body_->codegen(ctx)) {
     ctx.get_irbuilder().CreateRet(retVal);
@@ -189,13 +246,17 @@ Value* IfExprAST::codegen(CodegenContext& ctx) {
 
 Value* ForloopAST::codegen(CodegenContext& ctx) {
   // create the loop variable's initial value
-  Value* start_val = start_->codegen(ctx);
-  if (!start_val) return nullptr;
   LLVMContext& Lctx = ctx.get_llvmcontext();
   IRBuilder<>& builder = ctx.get_irbuilder();
 
-  BasicBlock* preBB = builder.GetInsertBlock();
-  Function* parenFn = preBB->getParent();
+  // BasicBlock* preBB = builder.GetInsertBlock();
+  Function* parenFn = builder.GetInsertBlock()->getParent();
+
+  AllocaInst* allo = ctx.CreateEntryBlockAlloca(parenFn, var_name_);
+  Value* start_val = start_->codegen(ctx);
+  if (!start_val) return nullptr;
+
+  builder.CreateStore(start_val, allo);
 
   BasicBlock* loopBB =
       BasicBlock::Create(Lctx, "loop", parenFn);
@@ -205,14 +266,14 @@ Value* ForloopAST::codegen(CodegenContext& ctx) {
   builder.SetInsertPoint(loopBB);
 
   // this phi node is now inserted into the loopBB
-  PHINode* pn = builder.CreatePHI(
-      Type::getDoubleTy(Lctx), 2, var_name_.c_str());
+  // PHINode* pn = builder.CreatePHI(
+      // Type::getDoubleTy(Lctx), 2, var_name_.c_str());
   // add the first branch to the phi node
-  pn->addIncoming(start_val, preBB);
+  // pn->addIncoming(start_val, preBB);
 
   // cache the old value with identical name with loop variable
-  Value* oldVal = ctx.get_valmap()[var_name_];
-  ctx.get_valmap()[var_name_] = pn;
+  AllocaInst* oldVal = ctx.get_valmap()[var_name_];
+  ctx.get_valmap()[var_name_] = allo;
 
   if (!body_->codegen(ctx)) return nullptr;
 
@@ -223,8 +284,12 @@ Value* ForloopAST::codegen(CodegenContext& ctx) {
     delta = step_->codegen(ctx);
     if (!delta) return nullptr;
   }
+  // load loop variable from stack
+  Value* cur_val =
+      builder.CreateLoad(allo->getAllocatedType(), allo, var_name_.c_str());
 
-  Value* next = builder.CreateFAdd(pn, delta, "nextvar");
+  Value* next = builder.CreateFAdd(cur_val, delta, "nextvar");
+  builder.CreateStore(next, allo);
 
   Value* end = end_->codegen(ctx);
   if (!end)   return nullptr;
@@ -233,7 +298,7 @@ Value* ForloopAST::codegen(CodegenContext& ctx) {
   Value* cond = builder.CreateFCmpOEQ(
       end, ConstantFP::get(Lctx, APFloat(1.0)), "condition");
 
-  BasicBlock* endBB = builder.GetInsertBlock();
+  // BasicBlock* endBB = builder.GetInsertBlock();
   BasicBlock* postBB = BasicBlock::Create(Lctx, "postloop", parenFn);
 
   builder.CreateCondBr(cond, loopBB, postBB);
@@ -241,7 +306,7 @@ Value* ForloopAST::codegen(CodegenContext& ctx) {
   builder.SetInsertPoint(postBB);
 
   // set the end instruction as the predecessor of this phi node
-  pn->addIncoming(next, endBB);
+  // pn->addIncoming(next, endBB);
 
   if (oldVal)   ctx.get_valmap()[var_name_] = oldVal;
   else          ctx.get_valmap().erase(var_name_);
@@ -324,6 +389,8 @@ std::unique_ptr<ExprAST> Parser::ParsePrimary() {
       return ParseIfExpr();
     case Token::FOR:
       return ParseForloop();
+    case Token::VAR:
+      return ParseVariableDecl();
     default:
       return LogError("[Parsing Error] unknown token when parsing an expression.");
   }
@@ -374,9 +441,37 @@ std::unique_ptr<ExprAST> Parser::ParseUnaryExpr() {
   Token::Value op = curToken;
   getNextToken();
   if (auto val = ParseUnaryExpr()) {
-    return std::make_unique<UnaryExprAST>(op, std::move(val));
+    auto entry = unarySet.find(op);
+    if (entry != unarySet.end())
+      return std::make_unique<UnaryExprAST>(op, std::move(val));
+    else
+      // only handle intrinsic unary operators
+      return BuildUnaryExpr(std::move(val), op);
   }
   return nullptr;
+}
+
+std::unique_ptr<ExprAST> Parser::BuildUnaryExpr(
+    std::unique_ptr<ExprAST> expr, Token::Value val) {
+  if (expr->getType() == ExprAST::kNumberExpr) {
+    NumberExprAST* num_expr =
+        static_cast<NumberExprAST*>(expr.get());
+    if (val == Token::SUB)
+      return std::make_unique<NumberExprAST>(-num_expr->value());
+    if (val == Token::ADD)
+      return std::move(expr);
+    if (val == Token::NOT) {
+      double nv = num_expr->value();
+      return std::make_unique<NumberExprAST>(nv == 0 ? 1 : 0);
+    }
+  }
+  if (val == Token::NOT) {
+    auto zero = std::make_unique<NumberExprAST>(0);
+    auto one = std::make_unique<NumberExprAST>(1);
+    return std::make_unique<IfExprAST>(
+              std::move(expr), std::move(zero), std::move(one));
+  }
+  return std::make_unique<UnaryOperation>(val, std::move(expr));
 }
 
 std::unique_ptr<ExprAST> Parser::ParseExpression() {
@@ -415,6 +510,8 @@ std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
       setOpsPrecedence(Op, precedence);
       assert(precedence >= 0 && "Precedence can only be a non-negative integers.");
       getNextToken();
+    } else {
+      unarySet.insert(Op);
     }
   }
 
@@ -546,6 +643,40 @@ std::unique_ptr<ExprAST> Parser::ParseForloop() {
   if (!body)  return nullptr;
   return std::make_unique<ForloopAST>(variable_name,
       std::move(start_val), std::move(last_val), std::move(step), std::move(body));
+}
+
+std::unique_ptr<ExprAST> Parser::ParseVariableDecl() {
+  // eat keyword 'var'
+  getNextToken();
+
+  typedef std::pair<std::string, std::unique_ptr<ExprAST>> SEpair;
+  std::vector<SEpair> list;
+
+  while (true) {
+    if (curToken != Token::IDENTIFIER)
+      return LogError("Expecting an identifier after keyword 'var'.");
+    SEpair cur;
+    cur.first = lexer_.IdentifierStr();
+    cur.second = nullptr;
+    // eat variable name
+    getNextToken();
+    if (curToken == Token::ASSIGN) {
+      getNextToken();  // eat '='
+      auto initializer = ParseUnaryExpr();
+      if (!initializer)
+        return LogError("Expecting initializer after '='.");
+      cur.second = std::move(initializer);
+    }
+    list.push_back(std::move(cur));
+
+    if (curToken == Token::COMMA)
+      getNextToken();
+    else if (curToken == Token::SEMICOLON)
+      break;
+    else
+      return LogError("Expecting ',' or ';' in variable declaration.");
+  }
+  return std::make_unique<VariableDeclaration>(std::move(list));
 }
 
 void Parser::ParseToplevel(std::vector<std::unique_ptr<ExprAST>>& stmts) {
