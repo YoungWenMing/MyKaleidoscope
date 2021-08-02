@@ -91,9 +91,11 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
   Function* parenFn = builder.GetInsertBlock()->getParent();
   auto nameMap = ctx.get_valmap();
 
+  AllocaInst* allo = nullptr;
   for (auto& p : initList) {
     std::string& varName = p.first;
-    AllocaInst* allo = ctx.CreateEntryBlockAlloca(parenFn, varName);
+    allo = new AllocaInst(
+        Type::getDoubleTy(ctx.get_llvmcontext()), 0, varName.c_str(), builder.GetInsertBlock());
 
     Value* initVal;
     if (p.second) {
@@ -108,7 +110,8 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
     nameMap[varName] = allo;
   }
   // variable declarations do not have any nontrivial value
-  return ConstantFP::get(Type::getDoubleTy(ctx.get_llvmcontext()), APFloat(0.0));
+  return allo != nullptr ? (Value*)allo :
+      ConstantFP::get(Type::getDoubleTy(ctx.get_llvmcontext()), APFloat(0.0));
 }
 
 Value* CallExprAST::codegen(CodegenContext& ctx) {
