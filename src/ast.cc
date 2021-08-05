@@ -4,11 +4,11 @@
 
 namespace Kaleidoscope {
 
-Value* NumberExprAST::codegen(CodegenContext& ctx) {
+Value* NumberLiteral::codegen(CodegenContext& ctx) {
   return ConstantFP::get(ctx.get_llvmcontext(), APFloat(val_));
 }
 
-Value* VariableExprAST::codegen(CodegenContext& ctx) {
+Value* VariableExpr::codegen(CodegenContext& ctx) {
   Value* val = ctx.get_valmap()[name_];
   if (!val)
       return LogErrorV("variable is not defined.");
@@ -18,7 +18,7 @@ Value* VariableExprAST::codegen(CodegenContext& ctx) {
 Value* BinaryExprAST::codegen(CodegenContext& ctx) {
   if (op_ == Token::ASSIGN) {
     assert(lhs_->getType() == ExprAST::kVariableExpr);
-    VariableExprAST* vlhs = static_cast<VariableExprAST*>(lhs_.get());
+    VariableExpr* vlhs = static_cast<VariableExpr*>(lhs_.get());
 
     AllocaInst* allo = ctx.get_valmap()[vlhs->varName()];
     if (allo == nullptr)
@@ -193,7 +193,7 @@ Function* FunctionAST::codegen(CodegenContext& ctx) {
   return nullptr;
 }
 
-Value* IfExprAST::codegen(CodegenContext& ctx) {
+Value* IfStatement::codegen(CodegenContext& ctx) {
   Value* cond = condition_->codegen(ctx);
 
   if (!cond)  return nullptr;
@@ -246,7 +246,7 @@ Value* IfExprAST::codegen(CodegenContext& ctx) {
   return pn;
 }
 
-Value* ForloopAST::codegen(CodegenContext& ctx) {
+Value* ForloopStatement::codegen(CodegenContext& ctx) {
   // create the loop variable's initial value
   LLVMContext& Lctx = ctx.get_llvmcontext();
   IRBuilder<>& builder = ctx.get_irbuilder();

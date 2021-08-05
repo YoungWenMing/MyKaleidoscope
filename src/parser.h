@@ -44,32 +44,47 @@ class Parser {
     curToken = lexer_.NextToken();
   }
 
+  std::string& getIdentifierStr() {
+    return lexer_.IdentifierStr();
+  }
+
   int getOpsPrecedence(Token::Value token);
   void setOpsPrecedence(Token::Value token, uint32_t prece) {
     preceMap[token] = prece;
   }
 
-  std::unique_ptr<ExprAST> ParseExpression();
-  std::unique_ptr<NumberExprAST> ParseNumberExpr();
-  std::unique_ptr<ExprAST> ParseIdentifierExpr();
-  std::unique_ptr<ExprAST> ParseParenExpr();
-  std::unique_ptr<ExprAST> ParsePrimary();
+  std::unique_ptr<Expression>             ParseExpression();
+  std::unique_ptr<NumberLiteral>          ParseNumberExpr();
+  std::unique_ptr<Expression>             ParseIdentifierExpr();
+  std::unique_ptr<Expression>             ParseParenExpr();
+  std::unique_ptr<Expression>             ParsePrimary();
 
-  std::unique_ptr<ExprAST> ParseBinopRhs(
-      int last_prec, std::unique_ptr<ExprAST> lhs);
-  std::unique_ptr<ExprAST> ParseUnaryExpr();
+  std::unique_ptr<Assignment>             ParseAssignment(
+      std::unique_ptr<Expression> target);
 
-  std::unique_ptr<ExprAST> BuildUnaryExpr(
-      std::unique_ptr<ExprAST> expr, Token::Value val);
+  std::unique_ptr<Expression>             ParseBinopRhs(
+      int last_prec, std::unique_ptr<Expression> lhs);
+  std::unique_ptr<Expression>             ParseUnaryExpr();
 
-  std::unique_ptr<PrototypeAST> ParsePrototype();
-  std::unique_ptr<PrototypeAST> ParseExtern();
-  std::unique_ptr<FunctionAST> ParseDefinition();
-  std::unique_ptr<FunctionAST> ParseToplevelExpr();
+  std::unique_ptr<Expression>             BuildUnaryExpr(
+      std::unique_ptr<Expression> expr, Token::Value val);
 
-  std::unique_ptr<ExprAST> ParseIfExpr();
-  std::unique_ptr<ExprAST> ParseForloop();
-  std::unique_ptr<ExprAST> ParseVariableDecl();
+  std::unique_ptr<PrototypeAST>           ParsePrototype();
+
+  std::unique_ptr<PrototypeAST>           ParseExtern();
+  std::unique_ptr<FunctionDeclaration>    ParseFunctionDecl();
+
+  std::unique_ptr<IfStatement>            ParseIfStatement();
+  std::unique_ptr<ForloopStatement>       ParseForloop();
+  std::unique_ptr<VariableDeclaration>    ParseVariableDecl();
+  std::unique_ptr<Block>                  ParseBlock();
+  std::unique_ptr<ExpressionStatement>    ParseExpressionStmt();
+  std::unique_ptr<EmptyStatement>         ParseEmptyStatement();
+
+  void ParseStatementsList(StmtsList& list);
+  std::unique_ptr<Statement> ParseStatement();
+
+  bool Expect(Token::Value val);
 
 #if DEBUG
   void LogInfo(const char* info);
@@ -78,8 +93,7 @@ class Parser {
  public:
   Parser(const char* src, size_t len);
 
-  void ParseToplevel(std::vector<std::unique_ptr<ExprAST>>& stmts);
-
+  std::unique_ptr<Block> ParseToplevel();
 };
 
 } // Kaleidoscope

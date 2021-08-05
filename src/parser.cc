@@ -17,20 +17,20 @@ int Parser::getOpsPrecedence(Token::Value token) {
   return Token::Precedence(token);
 }
 
-std::unique_ptr<NumberExprAST> Parser::ParseNumberExpr() {
-  std::unique_ptr<NumberExprAST> result =
-      std::make_unique<NumberExprAST>(lexer_.NumberVal());
+std::unique_ptr<NumberLiteral> Parser::ParseNumberExpr() {
+  std::unique_ptr<NumberLiteral> result =
+      std::make_unique<NumberLiteral>(lexer_.NumberVal());
   getNextToken();
   return result;
 }
 
-std::unique_ptr<ExprAST> Parser::ParseIdentifierExpr() {
+std::unique_ptr<Expression> Parser::ParseIdentifierExpr() {
   // handles simple identifiers and function calls
   std::string id = lexer_.IdentifierStr();
 
   getNextToken();
   if (curToken != Token::LPAREN) {
-    return std::make_unique<VariableExprAST>(id);
+    return std::make_unique<VariableExpr>(id);
   }
 
   // handle the function call cases
@@ -58,18 +58,20 @@ std::unique_ptr<ExprAST> Parser::ParseIdentifierExpr() {
   return std::make_unique<CallExprAST>(id, std::move(args));
 }
 
-std::unique_ptr<ExprAST> Parser::ParseParenExpr() {
+std::unique_ptr<Expression> Parser::ParseParenExpr() {
   getNextToken();
   auto expr = ParseExpression();
 
-  if (curToken != Token::RPAREN)
-    return LogError("[Parsing Error] Expecting a ')'.");
+  if (curToken != Token::RPAREN) {
+    LogError("[Parsing Error] Expecting a ')'.");
+    return nullptr;
+  }
 
   getNextToken();
   return expr;
 }
 
-std::unique_ptr<ExprAST> Parser::ParsePrimary() {
+std::unique_ptr<Expression> Parser::ParsePrimary() {
   switch (curToken) {
     case Token::NUMBER:
       return ParseNumberExpr();
@@ -77,19 +79,26 @@ std::unique_ptr<ExprAST> Parser::ParsePrimary() {
       return ParseIdentifierExpr();
     case Token::LPAREN:
       return ParseParenExpr();
-    case Token::IF:
-      return ParseIfExpr();
-    case Token::FOR:
-      return ParseForloop();
-    case Token::VAR:
-      return ParseVariableDecl();
     default:
-      return LogError("[Parsing Error] unknown token when parsing an expression.");
+      LogError("[Parsing Error] unknown token when parsing an expression.");
+      return nullptr;
   }
 }
 
-std::unique_ptr<ExprAST> Parser::ParseBinopRhs(
-    int last_prec, std::unique_ptr<ExprAST> lhs) {
+std::unique_ptr<Assignment>
+    Parser::ParseAssignment(std::unique_ptr<Expression> lhs) {
+  // eat assign operator
+  if (lhs->getType() != ExprAST::kVariableExpr) {
+    LogError("Only variables is assignable.");
+    return nullptr;
+  }
+  getNextToken();
+  auto value = ParseExpression();
+  return std::make_unique<Assignment>(std::move(lhs), std::move(value));
+}
+
+std::unique_ptr<Expression> Parser::ParseBinopRhs(
+    int last_prec, std::unique_ptr<Expression> lhs) {
   while (true) {
     // curToken is one binary operator now
     int cur_prec = getOpsPrecedence(curToken);
@@ -105,9 +114,11 @@ std::unique_ptr<ExprAST> Parser::ParseBinopRhs(
 
     // parse the next primary expression first
     // 1 + +3 or 1 + -3 is also valid
-    std::unique_ptr<ExprAST> rhs = ParseUnaryExpr();
-    if (rhs == nullptr)
-      return LogError("[Parsing Error] Expecting a primary expression.");
+    std::unique_ptr<Expression> rhs = ParseUnaryExpr();
+    if (rhs == nullptr) {
+      LogError("[Parsing Error] Expecting a primary expression.");
+      return nullptr;
+    }
 
     int next_prec = getOpsPrecedence(curToken);
 
@@ -127,7 +138,7 @@ std::unique_ptr<ExprAST> Parser::ParseBinopRhs(
 /// unary
 ///   ::= primary
 ///   ::= '!' unary
-std::unique_ptr<ExprAST> Parser::ParseUnaryExpr() {
+std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
   if (!Token::IsUnaryOp(curToken))  return ParsePrimary();
 
   Token::Value op = curToken;
@@ -143,32 +154,34 @@ std::unique_ptr<ExprAST> Parser::ParseUnaryExpr() {
   return nullptr;
 }
 
-std::unique_ptr<ExprAST> Parser::BuildUnaryExpr(
-    std::unique_ptr<ExprAST> expr, Token::Value val) {
+std::unique_ptr<Expression> Parser::BuildUnaryExpr(
+    std::unique_ptr<Expression> expr, Token::Value val) {
   if (expr->getType() == ExprAST::kNumberExpr) {
-    NumberExprAST* num_expr =
-        static_cast<NumberExprAST*>(expr.get());
+    NumberLiteral* num_expr =
+        static_cast<NumberLiteral*>(expr.get());
     if (val == Token::SUB)
-      return std::make_unique<NumberExprAST>(-num_expr->value());
+      return std::make_unique<NumberLiteral>(-num_expr->value());
     if (val == Token::ADD)
       return std::move(expr);
     if (val == Token::NOT) {
       double nv = num_expr->value();
-      return std::make_unique<NumberExprAST>(nv == 0 ? 1 : 0);
+      return std::make_unique<NumberLiteral>(nv == 0 ? 1 : 0);
     }
   }
   if (val == Token::NOT) {
-    auto zero = std::make_unique<NumberExprAST>(0);
-    auto one = std::make_unique<NumberExprAST>(1);
-    return std::make_unique<IfExprAST>(
-              std::move(expr), std::move(zero), std::move(one));
+    auto zero = std::make_unique<NumberLiteral>(0);
+    auto one = std::make_unique<NumberLiteral>(1);
+    return nullptr;
   }
   return std::make_unique<UnaryOperation>(val, std::move(expr));
 }
 
-std::unique_ptr<ExprAST> Parser::ParseExpression() {
-  std::unique_ptr<ExprAST> lhs = ParseUnaryExpr();
+std::unique_ptr<Expression> Parser::ParseExpression() {
+  std::unique_ptr<Expression> lhs = ParseUnaryExpr();
   if (!lhs)   return lhs;
+
+  if (curToken == Token::ASSIGN)
+    return ParseAssignment(std::move(lhs));
   return ParseBinopRhs(0, std::move(lhs));
 }
 
@@ -197,7 +210,8 @@ std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
     if (FnName.front() == 'b') {
       // get the precedence for binary operator
       if (curToken != Token::NUMBER)
-        return LogErrorP("[Parsing Error] Expecting a number for binary operator's precedence.");
+        return LogErrorP("[Parsing Error] Expecting a number"
+                  "for binary operator's precedence.");
       precedence = static_cast<int>(lexer_.NumberVal());
       setOpsPrecedence(Op, precedence);
       assert(precedence >= 0 && "Precedence can only be a non-negative integers.");
@@ -232,16 +246,18 @@ std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
             std::make_unique<PrototypeAST>(FnName, args_);
 }
 
-std::unique_ptr<FunctionAST> Parser::ParseDefinition() {
+std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDecl() {
   // eat 'def'
   getNextToken();
   // get prototype
   std::unique_ptr<PrototypeAST> proto = ParsePrototype();
-  if (!proto)
-    return nullptr;
-  std::unique_ptr<ExprAST> body = ParseExpression();
-  if (body)
-    return std::make_unique<FunctionAST>(std::move(proto), std::move(body));
+  if (!proto)   return nullptr;
+  if (curToken == Token::RBRACE
+      || curToken == Token::SEMICOLON) {
+    auto body = ParseStatement();
+    return std::make_unique<FunctionDeclaration>(
+                std::move(proto), std::move(body));
+  }
   return nullptr;
 }
 
@@ -253,145 +269,170 @@ std::unique_ptr<PrototypeAST> Parser::ParseExtern() {
   return proto;
 }
 
-std::unique_ptr<FunctionAST> Parser::ParseToplevelExpr() {
-  std::unique_ptr<ExprAST> expr = ParseExpression();
-  if (expr) {
-    std::unique_ptr<PrototypeAST> proto =
-        std::make_unique<PrototypeAST>(std::string("__anon_expr"), std::vector<std::string>());
-    return std::make_unique<FunctionAST>(std::move(proto), std::move(expr));
-  }
-  return nullptr;
-}
-
-std::unique_ptr<ExprAST> Parser::ParseIfExpr() {
+// IfStatement :
+//    'if' '(' Expression ')' Statement
+//         ('else' Statement) ?
+std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
   // eat 'if'
   getNextToken();
-  std::unique_ptr<ExprAST> cond = ParseExpression();
-
+  if (!Expect(Token::LPAREN)) return nullptr;
+  std::unique_ptr<Expression> cond = ParseExpression();
   if (!cond)
     return nullptr;
 
-  if (curToken != Token::THEN)
-    return LogError("[Parse Error] Expecting a 'then' keyword after 'if'");
+  if (!Expect(Token::RPAREN)) return nullptr;
+  auto then_stmt = ParseStatement();
   
-  // eat 'then'
-  getNextToken();
-  std::unique_ptr<ExprAST> thenB = ParseExpression();
-  std::unique_ptr<ExprAST> elseB = nullptr;
+  if (!then_stmt) return nullptr;
 
-  if (curToken == Token::ELSE) {
-    // eat 'else'
-    getNextToken();
-    elseB = ParseExpression();
-  }
+  std::unique_ptr<Statement> else_stmt = nullptr;
+  if (Expect(Token::ELSE))
+    else_stmt = ParseStatement();
 
-  std::unique_ptr<IfExprAST> result =
-      std::make_unique<IfExprAST>(std::move(cond),
-                                  std::move(thenB),
-                                  std::move(elseB));
-  return std::move(result);
+  return std::make_unique<IfStatement>(std::move(cond),
+            std::move(then_stmt), std::move(else_stmt));
 }
 
-std::unique_ptr<ExprAST> Parser::ParseForloop() {
+std::unique_ptr<ForloopStatement> Parser::ParseForloop() {
   // eat 'for'
   getNextToken();
 
-  if (curToken != Token::IDENTIFIER)
-    return LogError("[Parse Error] Expecting a loop variable here.");
-  
-  std::string variable_name(lexer_.IdentifierStr());
-  // eat variable name
-  getNextToken();
-
-  if (curToken != Token::ASSIGN)
-    return LogError("[Parse Error] expecting '=' after loop variable.");
-  // eat '='
-  getNextToken();
-
-  std::unique_ptr<ExprAST> start_val = ParseExpression();
-  if (start_val == nullptr)
-    return LogError("[Parse Error] Expecting primary after '='.");
-  // eat expression after '='
-  if (curToken != Token::COMMA)
-    return LogError("[Parse Error] Expecting ',' as a delimiter.");
-  
-  getNextToken();
-  std::unique_ptr<ExprAST> last_val = ParseExpression();
-  if (!last_val)
+  if (!Expect(Token::LPAREN)) {
+    LogError("Expecting '(' following keyword 'for' in a ForLoop statement.");
     return nullptr;
-
-  std::unique_ptr<ExprAST> step = nullptr;
-  if (curToken == Token::COMMA) {
-    getNextToken();
-    step = ParseExpression();
-    if (!step)  return nullptr;
   }
-  // eat ',' or last token of an expression
-  if (curToken != Token::IN)
-    LogError("[Syntax Error] keyword 'in' is necessarry in a forloop.");
-  
-  getNextToken();
-  std::unique_ptr<ExprAST> body = ParseExpression();
-  if (!body)  return nullptr;
-  return std::make_unique<ForloopAST>(variable_name,
-      std::move(start_val), std::move(last_val), std::move(step), std::move(body));
+ 
+  auto init_stmt = ParseStatement();
+  auto cond_expr = ParseExpression();
+  if (!Expect(Token::SEMICOLON))  return nullptr;
+  auto next_stmt = ParseStatement();
+
+  if (!Expect(Token::RPAREN)) {
+    LogError("Expecting ')' in a ForLoop statement.");
+    return nullptr;
+  }
+
+  auto body = ParseStatement();
+  if (body == nullptr)  return nullptr;
+  return std::make_unique<ForloopStatement>(std::move(init_stmt),
+            std::move(cond_expr), std::move(next_stmt), std::move(body));
 }
 
-std::unique_ptr<ExprAST> Parser::ParseVariableDecl() {
+// Variable Declaration
+// var a = 1, b, c;
+std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
   // eat keyword 'var'
   getNextToken();
 
   typedef std::pair<std::string, std::unique_ptr<ExprAST>> SEpair;
   std::vector<SEpair> list;
+  std::unique_ptr<VariableDeclaration> decl = nullptr;
+  VariableDeclaration* current = nullptr;
 
   while (true) {
-    if (curToken != Token::IDENTIFIER)
-      return LogError("Expecting an identifier after keyword 'var'.");
-    SEpair cur;
-    cur.first = lexer_.IdentifierStr();
-    cur.second = nullptr;
-    // eat variable name
+    if (curToken != Token::IDENTIFIER) {
+      LogError("Expecting an identifier after keyword 'var'.");
+      return nullptr;
+    }
+
+    std::string var_name(getIdentifierStr());
+    std::unique_ptr<Assignment> assign = nullptr;
+    // eat variable's id string
     getNextToken();
     if (curToken == Token::ASSIGN) {
-      getNextToken();  // eat '='
-      auto initializer = ParseUnaryExpr();
-      if (!initializer)
-        return LogError("Expecting initializer after '='.");
-      cur.second = std::move(initializer);
+      // eat '='
+      std::unique_ptr<VariableExpr> target =
+          std::make_unique<VariableExpr>(var_name);
+      assign = ParseAssignment(std::move(target));
     }
-    list.push_back(std::move(cur));
+    auto temp = std::make_unique<VariableDeclaration>(var_name, std::move(assign));
+    if (decl == nullptr) {
+      decl = std::unique_ptr<VariableDeclaration>(temp.release());
+      current = decl.get();
+    } else {
+      auto t = temp.get();
+      current->set_next(std::move(temp));
+      current = t;
+    }
 
-    if (curToken == Token::COMMA)
-      getNextToken();
-    else if (curToken == Token::SEMICOLON)
-      break;
-    else
-      return LogError("Expecting ',' or ';' in variable declaration.");
+    if (curToken == Token::COMMA) {
+      continue;
+    } else if (curToken == Token::SEMICOLON){
+      return decl;
+    } else {
+      LogError("Expecting an initializer expression or ',' after variable name.");
+      return nullptr;
+    }
   }
-  return std::make_unique<VariableDeclaration>(std::move(list));
 }
 
-void Parser::ParseToplevel(std::vector<std::unique_ptr<ExprAST>>& stmts) {
+std::unique_ptr<Block> Parser::ParseBlock() {
+  // eat left brace
   getNextToken();
-  std::unique_ptr<ExprAST> res;
-  while (curToken != Token::EOS) {
-    switch (curToken) {
-      case Token::DEF:
-        res = ParseDefinition();
-        stmts.push_back(std::move(res));
-        break;
-      case Token::EXTERN:
-        res = ParseExtern();
-        stmts.push_back(std::move(res));
-      case Token::SEMICOLON:
-        // eat directly
-        getNextToken();
-        break;
-      default:
-        res = ParseExpression();
-        stmts.push_back(std::move(res));
-    }
+  StmtsList *slist = new StmtsList();
+  ParseStatementsList(*slist);
+  if (!Expect(Token::RBRACE)) {
+    LogError("Expecting '{' at the end of a block.");
+    return nullptr;
   }
+  return std::make_unique<Block>(slist);
+}
+
+std::unique_ptr<ExpressionStatement> Parser::ParseExpressionStmt() {
+  auto expr = ParseExpression();
+  if (!expr)   return nullptr;
+  if (curToken != Token::SEMICOLON) {
+    LogError("Expecting a semicolon after expression.");
+    return nullptr;
+  }
+  return std::make_unique<ExpressionStatement>(std::move(expr));
+}
+
+std::unique_ptr<Statement> Parser::ParseStatement() {
+  std::unique_ptr<Statement> result;
+  switch (curToken) {
+    case Token::DEF:
+    case Token::EXTERN:
+      result = ParseFunctionDecl();
+    case Token::IF:
+      result = ParseIfStatement();
+    case Token::FOR:
+      result = ParseForloop();
+    case Token::LBRACE:
+      result = ParseBlock();
+    case Token::SEMICOLON:
+      result = ParseEmptyStatement();
+    default:
+      result = ParseExpressionStmt();
+  }
+  // eat ';'
+  if (curToken == Token::SEMICOLON) getNextToken();
+  return result;
+}
+
+void Parser::ParseStatementsList(StmtsList& list) {
+  while (curToken != Token::EOS &&
+            curToken != Token::RBRACE) {
+    auto t = ParseStatement();
+    if (t == nullptr)   return;
+    list.push_back(std::move(t));
+  }
+}
+
+std::unique_ptr<Block> Parser::ParseToplevel() {
+  // move the cursor to the very first AST node.
+  getNextToken();
+  StmtsList *statement_list = new StmtsList();
+  ParseStatementsList(*statement_list);
+  return std::make_unique<Block>(statement_list);
+}
+
+bool Parser::Expect(Token::Value val) {
+  if (curToken == val) {
+    getNextToken();
+    return true;
+  }
+  return false;
 }
 
 std::unique_ptr<ExprAST> LogError(const char* info) {

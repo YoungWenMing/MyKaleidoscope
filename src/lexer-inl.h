@@ -21,8 +21,8 @@ typedef std::unordered_map<std::string, Token::Value> TokenMap;
   G('i')                            \
   S("if")                           \
   S("in")                           \
-  G('t')                            \
-  S("then")                         \
+  G('r')                            \
+  S("return")                       \
   G('u')                            \
   S("unary")                        \
   G('v')                            \
