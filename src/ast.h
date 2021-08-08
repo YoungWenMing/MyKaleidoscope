@@ -17,9 +17,10 @@ namespace Kaleidoscope {
 
 class CodegenContext;
 
-
 using namespace llvm;
 using llvm::Value;
+
+#define UPtr(name) std::unique_ptr<name>
 
 // AST Node types:
 // Expression, Variable, Number, BinaryOp, Call, Prototype, Function
@@ -28,6 +29,7 @@ using llvm::Value;
   V(IfStatement)                        \
   V(ForLoop)                            \
   V(Block)                              \
+  V(ReturnStatement)                    \
   V(ExpressionStatement)                \
   V(VariableDeclaration)                \
   V(FunctionDeclaration)
@@ -275,6 +277,15 @@ class Block : public Statement {
 class EmptyStatement : public Statement {
  public:
   EmptyStatement() : Statement(kEmptyStatement) {}
+};
+
+class ReturnStatement : public Statement {
+  std::unique_ptr<Expression> expression_;
+ public:
+  ReturnStatement(std::unique_ptr<Expression> expr)
+      : Statement(kReturnStatement),
+        expression_(std::move(expr)) {}
+  Value* codegen(CodegenContext& ctx) override;
 };
 
 

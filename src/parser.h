@@ -80,6 +80,7 @@ class Parser {
   std::unique_ptr<Block>                  ParseBlock();
   std::unique_ptr<ExpressionStatement>    ParseExpressionStmt();
   std::unique_ptr<EmptyStatement>         ParseEmptyStatement();
+  std::unique_ptr<ReturnStatement>        ParseReturnStatement();
 
   void ParseStatementsList(StmtsList& list);
   std::unique_ptr<Statement> ParseStatement();
