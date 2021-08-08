@@ -17,7 +17,7 @@ int Parser::getOpsPrecedence(Token::Value token) {
   return Token::Precedence(token);
 }
 
-std::unique_ptr<NumberLiteral> Parser::ParseNumberExpr() {
+std::unique_ptr<NumberLiteral> Parser::ParseNumberLiteral() {
   std::unique_ptr<NumberLiteral> result =
       std::make_unique<NumberLiteral>(lexer_.NumberVal());
   getNextToken();
@@ -30,12 +30,12 @@ std::unique_ptr<Expression> Parser::ParseIdentifierExpr() {
 
   getNextToken();
   if (curToken != Token::LPAREN) {
-    return std::make_unique<VariableExpr>(id);
+    return std::make_unique<VariableExpression>(id);
   }
 
   // handle the function call cases
   getNextToken();
-  std::vector<std::unique_ptr<ExprAST>> args;
+  std::vector<std::unique_ptr<AstNode>> args;
   if (curToken != Token::RPAREN) {
     while (true) {
       if (auto arg = ParseExpression()) {
@@ -55,7 +55,7 @@ std::unique_ptr<Expression> Parser::ParseIdentifierExpr() {
     }
   }
   getNextToken();
-  return std::make_unique<CallExprAST>(id, std::move(args));
+  return std::make_unique<CallExpression>(id, std::move(args));
 }
 
 std::unique_ptr<Expression> Parser::ParseParenExpr() {
@@ -74,7 +74,7 @@ std::unique_ptr<Expression> Parser::ParseParenExpr() {
 std::unique_ptr<Expression> Parser::ParsePrimary() {
   switch (curToken) {
     case Token::NUMBER:
-      return ParseNumberExpr();
+      return ParseNumberLiteral();
     case Token::IDENTIFIER:
       return ParseIdentifierExpr();
     case Token::LPAREN:
@@ -88,7 +88,7 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
 std::unique_ptr<Assignment>
     Parser::ParseAssignment(std::unique_ptr<Expression> lhs) {
   // eat assign operator
-  if (lhs->getType() != ExprAST::kVariableExpr) {
+  if (lhs->getType() != AstNode::kVariableExpression) {
     LogError("Only variables is assignable.");
     return nullptr;
   }
@@ -130,7 +130,7 @@ std::unique_ptr<Expression> Parser::ParseBinopRhs(
       if (!rhs) return nullptr;
     }
   
-    lhs = std::make_unique<BinaryExprAST>(
+    lhs = std::make_unique<BinaryExpression>(
         cur_op, std::move(lhs), std::move(rhs));
   }
 }
@@ -146,7 +146,7 @@ std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
   if (auto val = ParseUnaryExpr()) {
     auto entry = unarySet.find(op);
     if (entry != unarySet.end())
-      return std::make_unique<UnaryExprAST>(op, std::move(val));
+      return std::make_unique<UnaryExpression>(op, std::move(val));
     else
       // only handle intrinsic unary operators
       return BuildUnaryExpr(std::move(val), op);
@@ -156,7 +156,7 @@ std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
 
 std::unique_ptr<Expression> Parser::BuildUnaryExpr(
     std::unique_ptr<Expression> expr, Token::Value val) {
-  if (expr->getType() == ExprAST::kNumberExpr) {
+  if (expr->getType() == AstNode::kNumberLiteral) {
     NumberLiteral* num_expr =
         static_cast<NumberLiteral*>(expr.get());
     if (val == Token::SUB)
@@ -326,7 +326,7 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
   // eat keyword 'var'
   getNextToken();
 
-  typedef std::pair<std::string, std::unique_ptr<ExprAST>> SEpair;
+  typedef std::pair<std::string, std::unique_ptr<AstNode>> SEpair;
   std::vector<SEpair> list;
   std::unique_ptr<VariableDeclaration> decl = nullptr;
   VariableDeclaration* current = nullptr;
@@ -343,8 +343,8 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
     getNextToken();
     if (curToken == Token::ASSIGN) {
       // eat '='
-      std::unique_ptr<VariableExpr> target =
-          std::make_unique<VariableExpr>(var_name);
+      std::unique_ptr<VariableExpression> target =
+          std::make_unique<VariableExpression>(var_name);
       assign = ParseAssignment(std::move(target));
     }
     auto temp = std::make_unique<VariableDeclaration>(var_name, std::move(assign));
@@ -458,7 +458,7 @@ bool Parser::Expect(Token::Value val) {
   return false;
 }
 
-std::unique_ptr<ExprAST> LogError(const char* info) {
+std::unique_ptr<AstNode> LogError(const char* info) {
   std::cerr << info << std::endl;
   return nullptr;
 }

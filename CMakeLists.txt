@@ -77,6 +77,8 @@ set(myparser_src
   ${CMAKE_SOURCE_DIR}/src/lexer.h
   ${CMAKE_SOURCE_DIR}/src/ast.h
   ${CMAKE_SOURCE_DIR}/src/ast.cc
+  ${CMAKE_SOURCE_DIR}/src/ast-printer.h
+  ${CMAKE_SOURCE_DIR}/src/ast-printer.cc
   ${CMAKE_SOURCE_DIR}/src/lexer-inl.h
   ${CMAKE_SOURCE_DIR}/src/parser.h
   ${CMAKE_SOURCE_DIR}/src/parser.cc

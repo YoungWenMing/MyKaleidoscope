@@ -16,6 +16,7 @@
 namespace Kaleidoscope {
 
 class CodegenContext;
+class Parser;
 
 using namespace llvm;
 using llvm::Value;
@@ -27,7 +28,7 @@ using llvm::Value;
 #define STATEMENT_NODE_LIST(V)          \
   V(EmptyStatement)                     \
   V(IfStatement)                        \
-  V(ForLoop)                            \
+  V(ForLoopStatement)                   \
   V(Block)                              \
   V(ReturnStatement)                    \
   V(ExpressionStatement)                \
@@ -36,12 +37,12 @@ using llvm::Value;
 
 
 #define EXPRESSION_NODE_LIST(V)         \
-  V(VariableExpr)                       \
-  V(NumberExpr)                         \
-  V(BinaryExpr)                         \
-  V(UnaryExpr)                          \
+  V(VariableExpression)                 \
+  V(NumberLiteral)                      \
+  V(BinaryExpression)                   \
+  V(UnaryExpression)                    \
   V(Assignment)                         \
-  V(CallExpr)                           \
+  V(CallExpression)                     \
   V(Prototype)                          \
   V(UnaryOperation)
 
@@ -49,7 +50,7 @@ using llvm::Value;
   STATEMENT_NODE_LIST(V)                \
   EXPRESSION_NODE_LIST(V)
 
-class ExprAST {
+class AstNode {
  public:
   enum ASTType : uint8_t {
 #define DECLARE_AST_TYPES(type) k##type,
@@ -57,7 +58,7 @@ class ExprAST {
 #undef DECLARE_AST_TYPES
   };
 
-  ExprAST(ASTType type) : type_(type) {}
+  AstNode(ASTType type) : type_(type) {}
 
   virtual Value* codegen(CodegenContext& ctx) = 0;
   virtual ASTType getType() const;
@@ -65,33 +66,33 @@ class ExprAST {
   ASTType type_;
 };
 
-class Statement : public ExprAST {
+class Statement : public AstNode {
  public:
-  Statement(ASTType type) : ExprAST(type) {}
+  Statement(ASTType type) : AstNode(type) {}
 };
 
-class Expression : public ExprAST {
+class Expression : public AstNode {
  public:
-  Expression(ASTType type) : ExprAST(type) {}
+  Expression(ASTType type) : AstNode(type) {}
 };
 
 
 typedef std::vector<std::unique_ptr<Statement>> StmtsList;
 
 class ExpressionStatement : public Statement {
-  std::unique_ptr<ExprAST> expr_;
+  std::unique_ptr<AstNode> expr_;
  public:
-  ExpressionStatement(std::unique_ptr<ExprAST> expr)
+  ExpressionStatement(std::unique_ptr<AstNode> expr)
       : Statement(kExpressionStatement),
         expr_(std::move(expr)) {}
   Value* codegen(CodegenContext& ctx) override;
 };
 
-class VariableExpr : public Expression {
+class VariableExpression : public Expression {
   std::string name_;
  public:
-  VariableExpr(std::string& name) :
-    Expression(kVariableExpr),
+  VariableExpression(std::string& name) :
+    Expression(kVariableExpression),
     name_(name) {}
   Value* codegen(CodegenContext& ctx) override;
   const std::string& varName() const { return name_; }
@@ -101,45 +102,45 @@ class NumberLiteral : public Expression {
   double val_;
  public:
   NumberLiteral(double val) :
-    Expression(kNumberExpr),
+    Expression(kNumberLiteral),
     val_(val) {}
   Value* codegen(CodegenContext& ctx) override;
   double value() const { return val_; }
 };
 
-class BinaryExprAST : public Expression {
+class BinaryExpression : public Expression {
   Token::Value op_;
-  std::unique_ptr<ExprAST> lhs_, rhs_;
+  std::unique_ptr<AstNode> lhs_, rhs_;
  public:
-  BinaryExprAST(Token::Value op, std::unique_ptr<ExprAST> lhs,
-                std::unique_ptr<ExprAST> rhs) :
-      Expression(kBinaryExpr),
+  BinaryExpression(Token::Value op, std::unique_ptr<AstNode> lhs,
+                std::unique_ptr<AstNode> rhs) :
+      Expression(kBinaryExpression),
       op_(op), lhs_(std::move(lhs)), rhs_(std::move(rhs)) {}
   Value* codegen(CodegenContext& ctx) override;
 };
 
-class UnaryExprAST : public Expression {
+class UnaryExpression : public Expression {
   Token::Value op_;
-  std::unique_ptr<ExprAST> val_;
+  std::unique_ptr<AstNode> val_;
  public:
-  UnaryExprAST(Token::Value op, std::unique_ptr<ExprAST> val) :
-    Expression(kUnaryExpr),
+  UnaryExpression(Token::Value op, std::unique_ptr<AstNode> val) :
+    Expression(kUnaryExpression),
     op_(op), val_(std::move(val)) {}
   Value* codegen(CodegenContext& ctx) override;
 };
 
-class CallExprAST : public Expression {
+class CallExpression : public Expression {
   std::string callee_;
   std::vector<std::unique_ptr<Expression> > args_;
  public:
-  CallExprAST(const std::string& callee,
+  CallExpression(const std::string& callee,
               std::vector<std::unique_ptr<Expression>> args) :
-      Expression(kCallExpr),
+      Expression(kCallExpression),
       callee_(callee), args_(std::move(args)) {}
   Value* codegen(CodegenContext& ctx) override;
 };
 
-class PrototypeAST : public Expression {
+class Prototype : public Expression {
   std::string name_;
   std::vector<std::string> args_;
   // store operator info and precedence
@@ -148,15 +149,15 @@ class PrototypeAST : public Expression {
   static constexpr int kTokenValueOffset = 16;
 
  public:
-  PrototypeAST(const std::string& name,
+  Prototype(const std::string& name,
                std::vector<std::string> args) :
       Expression(kPrototype),
       name_(name), args_(std::move(args)) {}
   
-  PrototypeAST(const std::string& name,
+  Prototype(const std::string& name,
                std::vector<std::string> args,
                uint32_t precedence, Token::Value token)
-      : PrototypeAST(name, args)
+      : Prototype(name, args)
          {
     flags = ((precedence & 0xFF) << kPrecedenceOffset) & 1;
     flags |= (token & 0xFF) << kTokenValueOffset;
@@ -180,10 +181,10 @@ class PrototypeAST : public Expression {
 };
 
 class FunctionDeclaration : public Statement {
-  std::unique_ptr<PrototypeAST> proto_;
+  std::unique_ptr<Prototype> proto_;
   std::unique_ptr<Block> body_;
  public:
-  FunctionDeclaration (std::unique_ptr<PrototypeAST> proto,
+  FunctionDeclaration (std::unique_ptr<Prototype> proto,
               std::unique_ptr<Block> body)
       : Statement(kFunctionDeclaration),
         proto_(std::move(proto)),
@@ -206,17 +207,17 @@ class IfStatement : public Statement {
   Value* codegen(CodegenContext& ctx) override;
 };
 
-class ForloopStatement : public Statement {
+class ForLoopStatement : public Statement {
   std::string var_name_;
   std::unique_ptr<Expression> condition_;
   std::unique_ptr<Statement> init_, next_, body_;
  public:
-    ForloopStatement (const std::string& var_name,
+    ForLoopStatement (const std::string& var_name,
              std::unique_ptr<Statement> init,
              std::unique_ptr<Expression> condition,
              std::unique_ptr<Statement> next,
              std::unique_ptr<Statement> body)
-      : Statement(kForLoop),
+      : Statement(kForLoopStatement),
         var_name_(var_name),
         init_(std::move(init)),
         condition_(std::move(condition)),
@@ -287,6 +288,28 @@ class ReturnStatement : public Statement {
         expression_(std::move(expr)) {}
   Value* codegen(CodegenContext& ctx) override;
 };
+
+template<typename SubClass>
+class AstVisitor {
+ public:
+  void Visit(AstNode* ast_node) { impl()->Visit(ast_node); }
+ protected:
+  SubClass* impl() {
+    return static_cast<SubClass>(this);
+  }
+};
+
+#define AST_VISIT_CASAES(NodeType)                    \
+  case k##NodeType:                                   \
+    this->impl()->Visit##NodeType(node);  break;
+
+#define AST_VISITOR_BIG_SWITCH(NodeType)              \
+  switch(node->getType()) {                           \
+  AST_VISIT_CASAES(AST_TYPE_LIST)                     \
+  default:  UNREACHABLE();
+
+// #define AST_VISITOR_MEMBERS_DECL(NodeType)
+
 
 
 } // Kaleidoscope 

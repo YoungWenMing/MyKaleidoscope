@@ -29,7 +29,7 @@ typedef std::map<Token::Value, int> PreceMap;
 typedef std::set<Token::Value> UnaryOpSet;
 
 
-std::unique_ptr<ExprAST> LogError(const char* info);
+std::unique_ptr<AstNode> LogError(const char* info);
 Value* LogErrorV(const char* info);
 std::unique_ptr<PrototypeAST> LogErrorP(const char* info);
 class Parser {
@@ -54,7 +54,7 @@ class Parser {
   }
 
   std::unique_ptr<Expression>             ParseExpression();
-  std::unique_ptr<NumberLiteral>          ParseNumberExpr();
+  std::unique_ptr<NumberLiteral>          ParseNumberLiteral();
   std::unique_ptr<Expression>             ParseIdentifierExpr();
   std::unique_ptr<Expression>             ParseParenExpr();
   std::unique_ptr<Expression>             ParsePrimary();
