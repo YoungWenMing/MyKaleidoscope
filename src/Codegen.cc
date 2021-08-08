@@ -45,7 +45,7 @@ void CodegenDriver::HandleExtern() {
 }
 
 void CodegenDriver::HandleDefinition() {
-  std::unique_ptr<FunctionAST> funcAst = parser_.ParseDefinition();
+  std::unique_ptr<FunctionAST> funcAst = parser_.ParseFunctionDecl();
   if (funcAst) {
     Function* funcIR = funcAst->codegen(ctx_);
     if (!funcIR)  return;

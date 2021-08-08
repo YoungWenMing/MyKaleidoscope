@@ -8,17 +8,17 @@ Value* NumberLiteral::codegen(CodegenContext& ctx) {
   return ConstantFP::get(ctx.get_llvmcontext(), APFloat(val_));
 }
 
-Value* VariableExpr::codegen(CodegenContext& ctx) {
+Value* VariableExpression::codegen(CodegenContext& ctx) {
   Value* val = ctx.get_valmap()[name_];
   if (!val)
       return LogErrorV("variable is not defined.");
   return ctx.get_irbuilder().CreateLoad(val, name_.c_str());
 }
 
-Value* BinaryExprAST::codegen(CodegenContext& ctx) {
+Value* BinaryExpression::codegen(CodegenContext& ctx) {
   if (op_ == Token::ASSIGN) {
-    assert(lhs_->getType() == ExprAST::kVariableExpr);
-    VariableExpr* vlhs = static_cast<VariableExpr*>(lhs_.get());
+    assert(lhs_->getType() == AstNode::kVariableExpression);
+    VariableExpression* vlhs = static_cast<VariableExpression*>(lhs_.get());
 
     AllocaInst* allo = ctx.get_valmap()[vlhs->varName()];
     if (allo == nullptr)
@@ -62,7 +62,7 @@ Value* BinaryExprAST::codegen(CodegenContext& ctx) {
   return ctx.get_irbuilder().CreateCall(opFn, {left, right}, "optmp");
 }
 
-Value* UnaryExprAST::codegen(CodegenContext& ctx) {
+Value* UnaryExpression::codegen(CodegenContext& ctx) {
   std::string opFnName("unary");
   opFnName.append(Token::TokenName(op_));
   Function* opFn = ctx.get_function(opFnName);
@@ -113,7 +113,7 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
       ConstantFP::get(Type::getDoubleTy(ctx.get_llvmcontext()), APFloat(0.0));
 }
 
-Value* CallExprAST::codegen(CodegenContext& ctx) {
+Value* CallExpression::codegen(CodegenContext& ctx) {
   Function* calleeFn = ctx.get_function(callee_);
   if (!calleeFn)
     return LogErrorV("Callee function is not defined."); // LogError here
@@ -153,7 +153,7 @@ Function* PrototypeAST::codegen(CodegenContext& ctx) {
   return F;
 }
 
-Function* FunctionAST::codegen(CodegenContext& ctx) {
+Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
   // get prototype from CodegenContext
   // store the function in FunctionProtos
   PrototypeAST& P = *proto_; 
@@ -314,6 +314,11 @@ Value* ForloopStatement::codegen(CodegenContext& ctx) {
   else          ctx.get_valmap().erase(var_name_);
 
   return Constant::getNullValue(Type::getDoubleTy(Lctx));
+}
+
+Value* Assignment::codegen(CodegenContext& ctx) {
+  
+
 }
 
 } // Kaleidoscope 
