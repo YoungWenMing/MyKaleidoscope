@@ -12,13 +12,13 @@ namespace Kaleidoscope {
   T(DEF, "def", 0)                                \
   T(EXTERN, "extern", 0)                          \
   T(IF, "if", 0)                                  \
-  T(THEN, "then", 0)                              \
   T(ELSE, "else", 0)                              \
   T(FOR, "for", 0)                                \
   T(IN, "in", 0)                                  \
   T(UNARY, "unary", 0)                            \
   T(BINARY, "binary", 0)                          \
-  T(VAR, "var", 0)
+  T(VAR, "var", 0)                                \
+  T(RETURN, "return", 0)
 
 #define BINARY_OP_LIST(T)                         \
   T(MUL, "*", 7)                                  \
@@ -36,6 +36,8 @@ namespace Kaleidoscope {
 #define TOKEN_LIST(T)                             \
   T(LPAREN, "(", 0)                               \
   T(RPAREN, ")", 0)                               \
+  T(LBRACE, "{", 0)                               \
+  T(RBRACE, "}", 0)                               \
   T(SEMICOLON, ";", 0)                            \
   T(COMMA, ",", 0)                                \
   T(ASSIGN, "=", 1)                               \
