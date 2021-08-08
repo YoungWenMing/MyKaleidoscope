@@ -293,6 +293,8 @@ std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
             std::move(then_stmt), std::move(else_stmt));
 }
 
+// Forloop
+//    := 'for' '(' statement ';' expression';' statement')' statement
 std::unique_ptr<ForloopStatement> Parser::ParseForloop() {
   // eat 'for'
   getNextToken();
@@ -366,6 +368,8 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
   }
 }
 
+// BlockStatement 
+//   := '{' statement* '}'
 std::unique_ptr<Block> Parser::ParseBlock() {
   // eat left brace
   getNextToken();
@@ -378,6 +382,16 @@ std::unique_ptr<Block> Parser::ParseBlock() {
   return std::make_unique<Block>(slist);
 }
 
+// ReturnStatement
+//   := 'return' expression ';'
+std::unique_ptr<ReturnStatement> Parser::ParseReturnStatement() {
+  getNextToken();
+  auto expr = ParseExpression();
+  return std::make_unique<ReturnStatement>(std::move(expr));
+}
+
+// ExpressionStatement
+//   := expression ';'
 std::unique_ptr<ExpressionStatement> Parser::ParseExpressionStmt() {
   auto expr = ParseExpression();
   if (!expr)   return nullptr;
@@ -388,6 +402,13 @@ std::unique_ptr<ExpressionStatement> Parser::ParseExpressionStmt() {
   return std::make_unique<ExpressionStatement>(std::move(expr));
 }
 
+// Statement
+//   := FunctionDeclaration 
+//    | IfStatement
+//    | Forloop
+//    | BlockStatement
+//    | ReturnStatement
+//    | EmptyStatement
 std::unique_ptr<Statement> Parser::ParseStatement() {
   std::unique_ptr<Statement> result;
   switch (curToken) {
@@ -400,6 +421,8 @@ std::unique_ptr<Statement> Parser::ParseStatement() {
       result = ParseForloop();
     case Token::LBRACE:
       result = ParseBlock();
+    case Token::RETURN:
+      result = ParseReturnStatement();
     case Token::SEMICOLON:
       result = ParseEmptyStatement();
     default:
