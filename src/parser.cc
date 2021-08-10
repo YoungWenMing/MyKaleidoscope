@@ -30,12 +30,12 @@ std::unique_ptr<Expression> Parser::ParseIdentifierExpr() {
 
   getNextToken();
   if (curToken != Token::LPAREN) {
-    return std::make_unique<VariableExpression>(id);
+    return std::make_unique<Identifier>(id);
   }
 
   // handle the function call cases
   getNextToken();
-  std::vector<std::unique_ptr<AstNode>> args;
+  std::vector<std::unique_ptr<Expression>> args;
   if (curToken != Token::RPAREN) {
     while (true) {
       if (auto arg = ParseExpression()) {
@@ -88,7 +88,7 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
 std::unique_ptr<Assignment>
     Parser::ParseAssignment(std::unique_ptr<Expression> lhs) {
   // eat assign operator
-  if (lhs->getType() != AstNode::kVariableExpression) {
+  if (lhs->getType() != AstNode::kIdentifier) {
     LogError("Only variables is assignable.");
     return nullptr;
   }
@@ -187,7 +187,7 @@ std::unique_ptr<Expression> Parser::ParseExpression() {
 
 // prototype
 //   ::= id '(' id* ')'
-std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
+std::unique_ptr<Prototype> Parser::ParsePrototype() {
   bool isOp = false;
   if (curToken != Token::IDENTIFIER) {
     if (curToken == Token::BINARY || curToken == Token::UNARY)
@@ -242,30 +242,29 @@ std::unique_ptr<PrototypeAST> Parser::ParsePrototype() {
   // eat ')'
   getNextToken();
   return precedence != -1? 
-            std::make_unique<PrototypeAST>(FnName, args_, precedence, Op) :
-            std::make_unique<PrototypeAST>(FnName, args_);
+            std::make_unique<Prototype>(FnName, args_, precedence, Op) :
+            std::make_unique<Prototype>(FnName, args_);
 }
 
 std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDecl() {
   // eat 'def'
   getNextToken();
   // get prototype
-  std::unique_ptr<PrototypeAST> proto = ParsePrototype();
+  std::unique_ptr<Prototype> proto = ParsePrototype();
   if (!proto)   return nullptr;
-  if (curToken == Token::RBRACE
-      || curToken == Token::SEMICOLON) {
-    auto body = ParseStatement();
+  if (curToken == Token::LBRACE) {
+    auto body = ParseBlock();
     return std::make_unique<FunctionDeclaration>(
                 std::move(proto), std::move(body));
   }
   return nullptr;
 }
 
-std::unique_ptr<PrototypeAST> Parser::ParseExtern() {
+std::unique_ptr<Prototype> Parser::ParseExtern() {
   // eat 'extern'
   getNextToken();
   // get prototype
-  std::unique_ptr<PrototypeAST> proto = ParsePrototype();
+  std::unique_ptr<Prototype> proto = ParsePrototype();
   return proto;
 }
 
@@ -295,7 +294,7 @@ std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
 
 // Forloop
 //    := 'for' '(' statement ';' expression';' statement')' statement
-std::unique_ptr<ForloopStatement> Parser::ParseForloop() {
+std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
   // eat 'for'
   getNextToken();
 
@@ -316,7 +315,7 @@ std::unique_ptr<ForloopStatement> Parser::ParseForloop() {
 
   auto body = ParseStatement();
   if (body == nullptr)  return nullptr;
-  return std::make_unique<ForloopStatement>(std::move(init_stmt),
+  return std::make_unique<ForLoopStatement>(std::move(init_stmt),
             std::move(cond_expr), std::move(next_stmt), std::move(body));
 }
 
@@ -343,8 +342,8 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
     getNextToken();
     if (curToken == Token::ASSIGN) {
       // eat '='
-      std::unique_ptr<VariableExpression> target =
-          std::make_unique<VariableExpression>(var_name);
+      std::unique_ptr<Identifier> target =
+          std::make_unique<Identifier>(var_name);
       assign = ParseAssignment(std::move(target));
     }
     auto temp = std::make_unique<VariableDeclaration>(var_name, std::move(assign));
@@ -358,8 +357,11 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
     }
 
     if (curToken == Token::COMMA) {
+      getNextToken();
       continue;
     } else if (curToken == Token::SEMICOLON){
+      // eat ';'
+      getNextToken();
       return decl;
     } else {
       LogError("Expecting an initializer expression or ',' after variable name.");
@@ -376,18 +378,10 @@ std::unique_ptr<Block> Parser::ParseBlock() {
   StmtsList *slist = new StmtsList();
   ParseStatementsList(*slist);
   if (!Expect(Token::RBRACE)) {
-    LogError("Expecting '{' at the end of a block.");
+    LogError("Expecting '}' at the end of a block.");
     return nullptr;
   }
   return std::make_unique<Block>(slist);
-}
-
-// ReturnStatement
-//   := 'return' expression ';'
-std::unique_ptr<ReturnStatement> Parser::ParseReturnStatement() {
-  getNextToken();
-  auto expr = ParseExpression();
-  return std::make_unique<ReturnStatement>(std::move(expr));
 }
 
 // ExpressionStatement
@@ -400,6 +394,26 @@ std::unique_ptr<ExpressionStatement> Parser::ParseExpressionStmt() {
     return nullptr;
   }
   return std::make_unique<ExpressionStatement>(std::move(expr));
+}
+
+std::unique_ptr<EmptyStatement> Parser::ParseEmptyStatement() {
+  DCHECK(curToken == Token::SEMICOLON);
+  getNextToken();
+  return std::make_unique<EmptyStatement>();
+}
+
+
+// ReturnStatement
+//   := 'return' expression ';'
+std::unique_ptr<ReturnStatement> Parser::ParseReturnStatement() {
+  DCHECK(curToken == Token::RETURN);
+  // eat 'return' keyword
+  getNextToken();
+  auto expr = ParseExpression();
+  DCHECK(curToken == Token::SEMICOLON);
+  // eat ';'
+  getNextToken();
+  return std::make_unique<ReturnStatement>(std::move(expr));
 }
 
 // Statement
@@ -415,16 +429,25 @@ std::unique_ptr<Statement> Parser::ParseStatement() {
     case Token::DEF:
     case Token::EXTERN:
       result = ParseFunctionDecl();
+      break;
     case Token::IF:
       result = ParseIfStatement();
+      break;
     case Token::FOR:
       result = ParseForloop();
+      break;
     case Token::LBRACE:
       result = ParseBlock();
+      break;
     case Token::RETURN:
       result = ParseReturnStatement();
+      break;
     case Token::SEMICOLON:
       result = ParseEmptyStatement();
+      break;
+    case Token::VAR:
+      result = ParseVariableDecl();
+      break;
     default:
       result = ParseExpressionStmt();
   }
@@ -468,7 +491,7 @@ Value* LogErrorV(const char* info) {
   return nullptr;
 }
 
-std::unique_ptr<PrototypeAST> LogErrorP(const char* info) {
+std::unique_ptr<Prototype> LogErrorP(const char* info) {
   std::cerr << info << std::endl;
   return nullptr;
 }

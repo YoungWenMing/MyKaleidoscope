@@ -76,6 +76,10 @@ Token::Value Lexer::ScanSingleOp() {
       return Token::LPAREN;
     case ')':
       return Token::RPAREN;
+    case '{':
+      return Token::LBRACE;
+    case '}':
+      return Token::RBRACE;
     case ';':
       return Token::SEMICOLON;
     case ',':

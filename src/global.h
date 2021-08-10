@@ -8,10 +8,7 @@ typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;
 typedef unsigned int uint32_t;
 
-void FATAL(const char* info) {
-  std::cerr << info << std::endl;
-  abort();
-}
+void FATAL(const char* info);
 
 #define UNREACHABLE() FATAL("unreachable code.")
 

@@ -84,6 +84,9 @@ set(myparser_src
   ${CMAKE_SOURCE_DIR}/src/parser.cc
   ${CMAKE_SOURCE_DIR}/src/Codegen.h
   ${CMAKE_SOURCE_DIR}/src/Codegen.cc
+  
+  ${CMAKE_SOURCE_DIR}/src/global.h
+  ${CMAKE_SOURCE_DIR}/src/logging.cc
 )
 
 add_executable(cctest

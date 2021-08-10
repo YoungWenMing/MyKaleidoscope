@@ -18,6 +18,8 @@ namespace Kaleidoscope {
 class CodegenContext;
 class Parser;
 
+class Block;
+
 using namespace llvm;
 using llvm::Value;
 
@@ -37,7 +39,7 @@ using llvm::Value;
 
 
 #define EXPRESSION_NODE_LIST(V)         \
-  V(VariableExpression)                 \
+  V(Identifier)                 \
   V(NumberLiteral)                      \
   V(BinaryExpression)                   \
   V(UnaryExpression)                    \
@@ -59,9 +61,10 @@ class AstNode {
   };
 
   AstNode(ASTType type) : type_(type) {}
+  virtual ~AstNode() = default;
 
   virtual Value* codegen(CodegenContext& ctx) = 0;
-  virtual ASTType getType() const;
+  ASTType getType() const { return type_; }
  private:
   ASTType type_;
 };
@@ -69,33 +72,38 @@ class AstNode {
 class Statement : public AstNode {
  public:
   Statement(ASTType type) : AstNode(type) {}
+  virtual ~Statement() = default;
 };
 
 class Expression : public AstNode {
  public:
   Expression(ASTType type) : AstNode(type) {}
+  virtual ~Expression() = default;
 };
 
 
 typedef std::vector<std::unique_ptr<Statement>> StmtsList;
 
 class ExpressionStatement : public Statement {
-  std::unique_ptr<AstNode> expr_;
+  std::unique_ptr<Expression> expr_;
  public:
-  ExpressionStatement(std::unique_ptr<AstNode> expr)
+  ExpressionStatement(std::unique_ptr<Expression> expr)
       : Statement(kExpressionStatement),
         expr_(std::move(expr)) {}
   Value* codegen(CodegenContext& ctx) override;
+  const Expression* expresssion() const {
+    return expr_.get();
+  }
 };
 
-class VariableExpression : public Expression {
+class Identifier : public Expression {
   std::string name_;
  public:
-  VariableExpression(std::string& name) :
-    Expression(kVariableExpression),
+  Identifier(std::string& name) :
+    Expression(kIdentifier),
     name_(name) {}
   Value* codegen(CodegenContext& ctx) override;
-  const std::string& varName() const { return name_; }
+  const std::string& var_name() const { return name_; }
 };
 
 class NumberLiteral : public Expression {
@@ -110,23 +118,28 @@ class NumberLiteral : public Expression {
 
 class BinaryExpression : public Expression {
   Token::Value op_;
-  std::unique_ptr<AstNode> lhs_, rhs_;
+  std::unique_ptr<Expression> lhs_, rhs_;
  public:
-  BinaryExpression(Token::Value op, std::unique_ptr<AstNode> lhs,
-                std::unique_ptr<AstNode> rhs) :
+  BinaryExpression(Token::Value op, std::unique_ptr<Expression> lhs,
+                std::unique_ptr<Expression> rhs) :
       Expression(kBinaryExpression),
       op_(op), lhs_(std::move(lhs)), rhs_(std::move(rhs)) {}
   Value* codegen(CodegenContext& ctx) override;
+  const Expression* left_expr() const { return lhs_.get(); }
+  const Expression* right_expr() const { return rhs_.get(); }
+  Token::Value operator_token() const { return op_; }
 };
 
 class UnaryExpression : public Expression {
   Token::Value op_;
-  std::unique_ptr<AstNode> val_;
+  std::unique_ptr<Expression> val_;
  public:
-  UnaryExpression(Token::Value op, std::unique_ptr<AstNode> val) :
+  UnaryExpression(Token::Value op, std::unique_ptr<Expression> val) :
     Expression(kUnaryExpression),
     op_(op), val_(std::move(val)) {}
   Value* codegen(CodegenContext& ctx) override;
+  Token::Value operator_token() const { return op_; }
+  const Expression* target_expr() const { return val_.get(); }
 };
 
 class CallExpression : public Expression {
@@ -138,6 +151,9 @@ class CallExpression : public Expression {
       Expression(kCallExpression),
       callee_(callee), args_(std::move(args)) {}
   Value* codegen(CodegenContext& ctx) override;
+  const std::string& callee() const { return callee_; }
+  const std::vector<std::unique_ptr<Expression> >*
+      args() const { return &args_; }
 };
 
 class Prototype : public Expression {
@@ -163,7 +179,7 @@ class Prototype : public Expression {
     flags |= (token & 0xFF) << kTokenValueOffset;
   }
 
-  std::string& getName() {
+  const std::string& getName() const {
     return name_;
   }
   Function* codegen(CodegenContext& ctx) override;
@@ -177,7 +193,7 @@ class Prototype : public Expression {
   bool isBinaryOp() const { return isOperator() && args_.size() == 2; }
   bool isUnaryOp() const { return isOperator() && args_.size() == 1; }
   uint32_t getPrecedence() const { return (flags >> kPrecedenceOffset) & 0xFF; }
-
+  const std::vector<std::string>& args() const { return args_; }
 };
 
 class FunctionDeclaration : public Statement {
@@ -190,6 +206,9 @@ class FunctionDeclaration : public Statement {
         proto_(std::move(proto)),
         body_(std::move(body)) {}
   Function* codegen(CodegenContext& ctx) override;
+
+  const Prototype* prototype() const { return proto_.get(); }
+  const Block* body() const { return body_.get(); }
 };
 
 class IfStatement : public Statement {
@@ -205,25 +224,30 @@ class IfStatement : public Statement {
         thenB_(std::move(thenB)),
         elseB_(std::move(elseB)) {}
   Value* codegen(CodegenContext& ctx) override;
+  const Expression* condition() const { return condition_.get(); }
+  const Statement* then_stmt() const { return thenB_.get(); }
+  const Statement* else_stmt() const { return elseB_.get(); }
 };
 
 class ForLoopStatement : public Statement {
-  std::string var_name_;
   std::unique_ptr<Expression> condition_;
   std::unique_ptr<Statement> init_, next_, body_;
  public:
-    ForLoopStatement (const std::string& var_name,
+    ForLoopStatement (
              std::unique_ptr<Statement> init,
              std::unique_ptr<Expression> condition,
              std::unique_ptr<Statement> next,
              std::unique_ptr<Statement> body)
       : Statement(kForLoopStatement),
-        var_name_(var_name),
         init_(std::move(init)),
         condition_(std::move(condition)),
         next_(std::move(next)),
         body_(std::move(body)) {}
   Value* codegen(CodegenContext& ctx) override;
+  const Expression* condition() const { return condition_.get(); }
+  const Statement* init() const { return init_.get(); }
+  const Statement* next() const { return next_.get(); }
+  const Statement* body() const { return body_.get(); }
 };
 
 // only handle intrinsic unary operator for now
@@ -235,6 +259,8 @@ class UnaryOperation : public Expression {
     : Expression(kUnaryOperation),
       op_(op), operand_(std::move(operand)) {}
   Value* codegen(CodegenContext& ctx) override;
+  Token::Value operator_token() const { return op_; }
+  const Expression* operand() const { return operand_.get(); }
 };
 
 class Assignment : public Expression {
@@ -247,6 +273,8 @@ class Assignment : public Expression {
       target_(std::move(target)),
       value_(std::move(value)) {}
   Value* codegen(CodegenContext& ctx) override;
+  const Expression* target() const { return target_.get(); }
+  const Expression* value() const { return value_.get(); }
 };
 
 class VariableDeclaration : public Statement {
@@ -264,20 +292,33 @@ class VariableDeclaration : public Statement {
   void set_next(std::unique_ptr<VariableDeclaration> next) {
     next_ = std::move(next);
   }
+  const VariableDeclaration* next() const {
+    return next_.get();
+  }
+  const std::string& var_name() const {
+    return name_;
+  }
+  const Assignment* assignment() const {
+    return init_expr_.get();
+  }
 };
 
 class Block : public Statement {
-  StmtsList statements_;
+  StmtsList* statements_;
  public:
-  Block(StmtsList statements)
+  Block(StmtsList* statements)
       : Statement(kBlock),
         statements_(std::move(statements)) {}
   Value* codegen(CodegenContext& ctx) override;
+  const StmtsList* statements() const {
+    return statements_;
+  }
 };
 
 class EmptyStatement : public Statement {
  public:
   EmptyStatement() : Statement(kEmptyStatement) {}
+  Value* codegen(CodegenContext& ctx);
 };
 
 class ReturnStatement : public Statement {
@@ -287,6 +328,9 @@ class ReturnStatement : public Statement {
       : Statement(kReturnStatement),
         expression_(std::move(expr)) {}
   Value* codegen(CodegenContext& ctx) override;
+  const Expression* expression() const {
+    return expression_.get();
+  }
 };
 
 template<typename SubClass>
@@ -295,18 +339,26 @@ class AstVisitor {
   void Visit(AstNode* ast_node) { impl()->Visit(ast_node); }
  protected:
   SubClass* impl() {
-    return static_cast<SubClass>(this);
+    return static_cast<SubClass*>(this);
   }
 };
 
 #define AST_VISIT_CASAES(NodeType)                    \
-  case k##NodeType:                                   \
-    this->impl()->Visit##NodeType(node);  break;
+  case AstNode::k##NodeType:                          \
+    this->impl()->Visit##NodeType(                    \
+        static_cast<const NodeType*>(node));  break;
 
-#define AST_VISITOR_BIG_SWITCH(NodeType)              \
+#define AST_VISITOR_BIG_SWITCH()              \
   switch(node->getType()) {                           \
-  AST_VISIT_CASAES(AST_TYPE_LIST)                     \
-  default:  UNREACHABLE();
+  AST_TYPE_LIST(AST_VISIT_CASAES)                     \
+  default:  UNREACHABLE();}
+
+#define DECLARE_VISITOR_FUNC(AstNode)                 \
+  void Visit##AstNode(AstNode *node);
+
+#define DECLARE_VISITOR_FUNC_CONST(AstNode)                 \
+  void Visit##AstNode(const AstNode *node);
+
 
 // #define AST_VISITOR_MEMBERS_DECL(NodeType)
 

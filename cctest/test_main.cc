@@ -4,9 +4,13 @@
 #include "src/lexer.h"
 #include "src/Codegen.h"
 #include "src/token.h"
+#include "src/ast-printer.h"
 
 using Kaleidoscope::Token;
 using Kaleidoscope::Lexer;
+using Kaleidoscope::Parser;
+using Kaleidoscope::AstNode;
+using Kaleidoscope::AstPrinter;
 using Kaleidoscope::CodegenDriver;
 
 const char* readSourceFile(const char* path) {
@@ -39,6 +43,13 @@ void test_lexer(const char* src) {
   } while (tok != Token::EOS);
 }
 
+void test_ast(const char* src) {
+  Parser parser(src, strlen(src));
+  std::unique_ptr<AstNode> root_block = parser.ParseToplevel();
+  AstPrinter printer;
+  printer.Visit(root_block.get());
+}
+
 void test_codegen(const char* src) {
   CodegenDriver driver(src, strlen(src));
   driver.run();
@@ -50,7 +61,8 @@ int main(int argc, char* argv[]) {
 
     if (buffer && strlen(buffer) != 0) {
       // test_lexer(buffer);
-      test_codegen(buffer);
+      // test_codegen(buffer);
+      test_ast(buffer);
     }
   }
 	// printf("%s\n", "hello world");

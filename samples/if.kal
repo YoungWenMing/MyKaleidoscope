@@ -1,12 +1,14 @@
 # Compute
-def ifgo(x)
-  if x < 2 then
-    1
+def ifgo(x) {
+  if (x < 2)
+    return 1;
   else
-    ifgo(x-1) + ifgo(x-2);
+    return ifgo(x-1) + ifgo(x-2);
+}
 
-def loopt()
-   for i = 0, i < 10, 2.0 in
-      i+1;
+def loopt() {
+  for (var t = 1; t < 10; t = t + 1) {
+    ifgo(2);
+  }
+}
 loopt();
-ifgo(2);

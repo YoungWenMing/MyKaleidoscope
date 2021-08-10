@@ -13,24 +13,24 @@ CodegenDriver::CodegenDriver(const char* src, size_t len) :
 
 
 void CodegenDriver::HandleToplevelExpression() {
-  std::unique_ptr<FunctionAST> funcAst = parser_.ParseToplevelExpr();
-  if (funcAst) {
-    Function* funcIR = funcAst->codegen(ctx_);
-    if (!funcIR)  return;
-    fprintf(stderr, "Read toplevel expression.");
-    funcIR->print(errs());
-    fprintf(stderr, "\n");
+  // std::unique_ptr<Function> funcAst = parser_.ParseToplevelExpr();
+  // if (funcAst) {
+  //   Function* funcIR = funcAst->codegen(ctx_);
+  //   if (!funcIR)  return;
+  //   fprintf(stderr, "Read toplevel expression.");
+  //   funcIR->print(errs());
+  //   fprintf(stderr, "\n");
 
-    ctx_.JITCompileToplevel(funcIR->getName().begin());
+  //   ctx_.JITCompileToplevel(funcIR->getName().begin());
 
-    // remove the anonymous expression
-  } else {
-    parser_.getNextToken();
-  }
+  //   // remove the anonymous expression
+  // } else {
+  //   parser_.getNextToken();
+  // }
 }
 
 void CodegenDriver::HandleExtern() {
-  std::unique_ptr<PrototypeAST> externAst = parser_.ParseExtern();
+  std::unique_ptr<Prototype> externAst = parser_.ParseExtern();
   if (externAst) {
     Function* funcIR = externAst->codegen(ctx_);
     if (!funcIR)  return;
@@ -45,18 +45,18 @@ void CodegenDriver::HandleExtern() {
 }
 
 void CodegenDriver::HandleDefinition() {
-  std::unique_ptr<FunctionAST> funcAst = parser_.ParseFunctionDecl();
-  if (funcAst) {
-    Function* funcIR = funcAst->codegen(ctx_);
-    if (!funcIR)  return;
-    fprintf(stderr, "Read definition.");
-    funcIR->print(errs());
-    fprintf(stderr, "\n");
+  // std::unique_ptr<FunctionAST> funcAst = parser_.ParseFunctionDecl();
+  // if (funcAst) {
+  //   Function* funcIR = funcAst->codegen(ctx_);
+  //   if (!funcIR)  return;
+  //   fprintf(stderr, "Read definition.");
+  //   funcIR->print(errs());
+  //   fprintf(stderr, "\n");
 
-    ctx_.add_module();
-  } else {
-    parser_.getNextToken();
-  }
+  //   ctx_.add_module();
+  // } else {
+  //   parser_.getNextToken();
+  // }
 }
 
 void CodegenDriver::run() {
@@ -136,7 +136,7 @@ Function* CodegenContext::get_function(std::string name) {
   return nullptr;
 }
 
-void CodegenContext::add_protos(std::unique_ptr<PrototypeAST> proto) {
+void CodegenContext::add_protos(std::unique_ptr<Prototype> proto) {
   FunctionProtos[proto->getName()] = std::move(proto);
 }
 
