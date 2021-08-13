@@ -31,7 +31,7 @@ typedef std::set<Token::Value> UnaryOpSet;
 
 std::unique_ptr<AstNode> LogError(const char* info);
 Value* LogErrorV(const char* info);
-std::unique_ptr<PrototypeAST> LogErrorP(const char* info);
+std::unique_ptr<Prototype> LogErrorP(const char* info);
 class Parser {
   Lexer lexer_;
   Token::Value curToken = Token::UNINITIALIZED;
@@ -69,21 +69,21 @@ class Parser {
   std::unique_ptr<Expression>             BuildUnaryExpr(
       std::unique_ptr<Expression> expr, Token::Value val);
 
-  std::unique_ptr<PrototypeAST>           ParsePrototype();
+  std::unique_ptr<Prototype>              ParsePrototype();
 
-  std::unique_ptr<PrototypeAST>           ParseExtern();
+  std::unique_ptr<Prototype>              ParseExtern();
   std::unique_ptr<FunctionDeclaration>    ParseFunctionDecl();
 
   std::unique_ptr<IfStatement>            ParseIfStatement();
-  std::unique_ptr<ForloopStatement>       ParseForloop();
+  std::unique_ptr<ForLoopStatement>       ParseForloop();
   std::unique_ptr<VariableDeclaration>    ParseVariableDecl();
   std::unique_ptr<Block>                  ParseBlock();
   std::unique_ptr<ExpressionStatement>    ParseExpressionStmt();
   std::unique_ptr<EmptyStatement>         ParseEmptyStatement();
   std::unique_ptr<ReturnStatement>        ParseReturnStatement();
+  std::unique_ptr<Statement>              ParseStatement();
 
   void ParseStatementsList(StmtsList& list);
-  std::unique_ptr<Statement> ParseStatement();
 
   bool Expect(Token::Value val);
 

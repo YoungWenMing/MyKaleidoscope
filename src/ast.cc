@@ -8,7 +8,11 @@ Value* NumberLiteral::codegen(CodegenContext& ctx) {
   return ConstantFP::get(ctx.get_llvmcontext(), APFloat(val_));
 }
 
-Value* VariableExpression::codegen(CodegenContext& ctx) {
+Value* ExpressionStatement::codegen(CodegenContext& ctx) {
+  return nullptr;
+}
+
+Value* Identifier::codegen(CodegenContext& ctx) {
   Value* val = ctx.get_valmap()[name_];
   if (!val)
       return LogErrorV("variable is not defined.");
@@ -17,10 +21,10 @@ Value* VariableExpression::codegen(CodegenContext& ctx) {
 
 Value* BinaryExpression::codegen(CodegenContext& ctx) {
   if (op_ == Token::ASSIGN) {
-    assert(lhs_->getType() == AstNode::kVariableExpression);
-    VariableExpression* vlhs = static_cast<VariableExpression*>(lhs_.get());
+    assert(lhs_->getType() == AstNode::kIdentifier);
+    Identifier* vlhs = static_cast<Identifier*>(lhs_.get());
 
-    AllocaInst* allo = ctx.get_valmap()[vlhs->varName()];
+    AllocaInst* allo = ctx.get_valmap()[vlhs->var_name()];
     if (allo == nullptr)
       return LogErrorV("Unknown variable name.");
 
@@ -90,27 +94,28 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
   Function* parenFn = builder.GetInsertBlock()->getParent();
   auto nameMap = ctx.get_valmap();
 
-  AllocaInst* allo = nullptr;
-  for (auto& p : initList) {
-    std::string& varName = p.first;
-    allo = new AllocaInst(
-        Type::getDoubleTy(ctx.get_llvmcontext()), 0, varName.c_str(), builder.GetInsertBlock());
+  return nullptr;
+  // AllocaInst* allo = nullptr;
+  // for (auto& p : initList) {
+  //   std::string& varName = p.first;
+  //   allo = new AllocaInst(
+  //       Type::getDoubleTy(ctx.get_llvmcontext()), 0, varName.c_str(), builder.GetInsertBlock());
 
-    Value* initVal;
-    if (p.second) {
-      initVal = p.second->codegen(ctx);
-      if (initVal == nullptr)
-        return nullptr;
-    } else {
-      initVal = ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0));
-    }
-    builder.CreateStore(initVal, allo);
-    // TODO: add checking for duplicate variable declaration.
-    nameMap[varName] = allo;
-  }
-  // variable declarations do not have any nontrivial value
-  return allo != nullptr ? (Value*)allo :
-      ConstantFP::get(Type::getDoubleTy(ctx.get_llvmcontext()), APFloat(0.0));
+  //   Value* initVal;
+  //   if (p.second) {
+  //     initVal = p.second->codegen(ctx);
+  //     if (initVal == nullptr)
+  //       return nullptr;
+  //   } else {
+  //     initVal = ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0));
+  //   }
+  //   builder.CreateStore(initVal, allo);
+  //   // TODO: add checking for duplicate variable declaration.
+  //   nameMap[varName] = allo;
+  // }
+  // // variable declarations do not have any nontrivial value
+  // return allo != nullptr ? (Value*)allo :
+  //     ConstantFP::get(Type::getDoubleTy(ctx.get_llvmcontext()), APFloat(0.0));
 }
 
 Value* CallExpression::codegen(CodegenContext& ctx) {
@@ -131,7 +136,7 @@ Value* CallExpression::codegen(CodegenContext& ctx) {
   return ctx.get_irbuilder().CreateCall(calleeFn, ArgsV, "calltemp");
 }
 
-Function* PrototypeAST::codegen(CodegenContext& ctx) {
+Function* Prototype::codegen(CodegenContext& ctx) {
   // all arguments are double type
   std::vector<Type*> doubles(args_.size(),
                              Type::getDoubleTy(ctx.get_llvmcontext()));
@@ -156,7 +161,7 @@ Function* PrototypeAST::codegen(CodegenContext& ctx) {
 Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
   // get prototype from CodegenContext
   // store the function in FunctionProtos
-  PrototypeAST& P = *proto_; 
+  Prototype& P = *proto_; 
   ctx.add_protos(std::move(proto_));
   Function* func = ctx.get_function(P.getName());
 
@@ -246,79 +251,92 @@ Value* IfStatement::codegen(CodegenContext& ctx) {
   return pn;
 }
 
-Value* ForloopStatement::codegen(CodegenContext& ctx) {
+Value* ForLoopStatement::codegen(CodegenContext& ctx) {
   // create the loop variable's initial value
-  LLVMContext& Lctx = ctx.get_llvmcontext();
-  IRBuilder<>& builder = ctx.get_irbuilder();
+  return nullptr;
+  // LLVMContext& Lctx = ctx.get_llvmcontext();
+  // IRBuilder<>& builder = ctx.get_irbuilder();
 
-  // BasicBlock* preBB = builder.GetInsertBlock();
-  Function* parenFn = builder.GetInsertBlock()->getParent();
+  // // BasicBlock* preBB = builder.GetInsertBlock();
+  // Function* parenFn = builder.GetInsertBlock()->getParent();
 
-  AllocaInst* allo = ctx.CreateEntryBlockAlloca(parenFn, var_name_);
-  Value* start_val = start_->codegen(ctx);
-  if (!start_val) return nullptr;
+  // AllocaInst* allo = ctx.CreateEntryBlockAlloca(parenFn, var_name_);
+  // Value* start_val = start_->codegen(ctx);
+  // if (!start_val) return nullptr;
 
-  builder.CreateStore(start_val, allo);
+  // builder.CreateStore(start_val, allo);
 
-  BasicBlock* loopBB =
-      BasicBlock::Create(Lctx, "loop", parenFn);
+  // BasicBlock* loopBB =
+  //     BasicBlock::Create(Lctx, "loop", parenFn);
   
-  // this command create a br label 'loop'
-  builder.CreateBr(loopBB);
-  builder.SetInsertPoint(loopBB);
+  // // this command create a br label 'loop'
+  // builder.CreateBr(loopBB);
+  // builder.SetInsertPoint(loopBB);
 
-  // this phi node is now inserted into the loopBB
-  // PHINode* pn = builder.CreatePHI(
-      // Type::getDoubleTy(Lctx), 2, var_name_.c_str());
-  // add the first branch to the phi node
-  // pn->addIncoming(start_val, preBB);
+  // // this phi node is now inserted into the loopBB
+  // // PHINode* pn = builder.CreatePHI(
+  //     // Type::getDoubleTy(Lctx), 2, var_name_.c_str());
+  // // add the first branch to the phi node
+  // // pn->addIncoming(start_val, preBB);
 
-  // cache the old value with identical name with loop variable
-  AllocaInst* oldVal = ctx.get_valmap()[var_name_];
-  ctx.get_valmap()[var_name_] = allo;
+  // // cache the old value with identical name with loop variable
+  // AllocaInst* oldVal = ctx.get_valmap()[var_name_];
+  // ctx.get_valmap()[var_name_] = allo;
 
-  if (!body_->codegen(ctx)) return nullptr;
+  // if (!body_->codegen(ctx)) return nullptr;
 
-  Value* delta;
-  if (!step_) {
-    delta = ConstantFP::get(Lctx, APFloat(1.0));
-  } else {
-    delta = step_->codegen(ctx);
-    if (!delta) return nullptr;
-  }
-  // load loop variable from stack
-  Value* cur_val =
-      builder.CreateLoad(allo->getAllocatedType(), allo, var_name_.c_str());
+  // Value* delta;
+  // if (!step_) {
+  //   delta = ConstantFP::get(Lctx, APFloat(1.0));
+  // } else {
+  //   delta = step_->codegen(ctx);
+  //   if (!delta) return nullptr;
+  // }
+  // // load loop variable from stack
+  // Value* cur_val =
+  //     builder.CreateLoad(allo->getAllocatedType(), allo, var_name_.c_str());
 
-  Value* next = builder.CreateFAdd(cur_val, delta, "nextvar");
-  builder.CreateStore(next, allo);
+  // Value* next = builder.CreateFAdd(cur_val, delta, "nextvar");
+  // builder.CreateStore(next, allo);
 
-  Value* end = end_->codegen(ctx);
-  if (!end)   return nullptr;
+  // Value* end = end_->codegen(ctx);
+  // if (!end)   return nullptr;
 
 
-  Value* cond = builder.CreateFCmpOEQ(
-      end, ConstantFP::get(Lctx, APFloat(1.0)), "condition");
+  // Value* cond = builder.CreateFCmpOEQ(
+  //     end, ConstantFP::get(Lctx, APFloat(1.0)), "condition");
 
-  // BasicBlock* endBB = builder.GetInsertBlock();
-  BasicBlock* postBB = BasicBlock::Create(Lctx, "postloop", parenFn);
+  // // BasicBlock* endBB = builder.GetInsertBlock();
+  // BasicBlock* postBB = BasicBlock::Create(Lctx, "postloop", parenFn);
 
-  builder.CreateCondBr(cond, loopBB, postBB);
+  // builder.CreateCondBr(cond, loopBB, postBB);
 
-  builder.SetInsertPoint(postBB);
+  // builder.SetInsertPoint(postBB);
 
-  // set the end instruction as the predecessor of this phi node
-  // pn->addIncoming(next, endBB);
+  // // set the end instruction as the predecessor of this phi node
+  // // pn->addIncoming(next, endBB);
 
-  if (oldVal)   ctx.get_valmap()[var_name_] = oldVal;
-  else          ctx.get_valmap().erase(var_name_);
+  // if (oldVal)   ctx.get_valmap()[var_name_] = oldVal;
+  // else          ctx.get_valmap().erase(var_name_);
 
-  return Constant::getNullValue(Type::getDoubleTy(Lctx));
+  // return Constant::getNullValue(Type::getDoubleTy(Lctx));
 }
 
 Value* Assignment::codegen(CodegenContext& ctx) {
   
+  return nullptr;
+}
 
+Value* EmptyStatement::codegen(CodegenContext& ctx) {
+  return nullptr;
+}
+
+Value* ReturnStatement::codegen(CodegenContext& ctx) {
+  return nullptr;
+}
+
+Value* Block::codegen(CodegenContext& ctx) {
+  return nullptr;
 }
 
 } // Kaleidoscope 

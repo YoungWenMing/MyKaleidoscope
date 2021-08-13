@@ -19,7 +19,7 @@ using namespace llvm;
 using namespace llvm::orc;
 
 typedef
-std::map<Token::Value, std::unique_ptr<PrototypeAST>> OpProtoMap;
+std::map<Token::Value, std::unique_ptr<Prototype>> OpProtoMap;
 
 class CodegenContext {
   std::unique_ptr<LLVMContext> TheContext;
@@ -33,7 +33,7 @@ class CodegenContext {
   std::unique_ptr<KaleidoscopeJIT> TheJIT;
 
   // for function code regeneration
-  std::map<std::string, std::unique_ptr<PrototypeAST>> FunctionProtos;
+  std::map<std::string, std::unique_ptr<Prototype>> FunctionProtos;
   // for user-defined operators
   // OpProtoMap OpProtos;
   // Parser* const parser_;
@@ -66,7 +66,7 @@ class CodegenContext {
 
   Function* get_function(std::string name);
 
-  void add_protos(std::unique_ptr<PrototypeAST> proto);
+  void add_protos(std::unique_ptr<Prototype> proto);
 
   void add_module();
 
