@@ -52,14 +52,13 @@ void AstPrinter::VisitForLoopStatement(const ForLoopStatement* node) {
 }
 
 void AstPrinter::VisitBlock(const Block* node) {
-  IndentScope scope(this, "Block:");
   {
-    IndentScope scope2(this, "Body: [");
+    IndentScope scope2(this, "Block: {");
     const StmtsList *statements_list = node->statements();
     for (int i = 0; i < statements_list->size(); ++i)
       this->Visit(statements_list->at(i).get());
   }
-  PrintIndented("]\n");
+  PrintIndented("}\n");
 }
 
 void AstPrinter::VisitReturnStatement(const ReturnStatement* node) {
@@ -128,19 +127,25 @@ void AstPrinter::VisitAssignment(const Assignment* node) {
 }
 
 void AstPrinter::VisitCallExpression(const CallExpression* node) {
-  IndentScope scope(this, "CallExpression:");
-
-  PrintIndentedNewLine(node->callee().c_str());
-  auto args_vec = node->args();
   {
-    IndentScope scope2(this, "Args: [");
-    for (int i = 0; i < args_vec->size(); ++i) {
-      PrintIndented(std::to_string(i).c_str());
-      Print(":\n");
-      this->Visit(args_vec->at(i).get());
+    IndentScope scope(this, "CallExpression:{");
+
+    PrintIndented("Callee:");
+    Print(node->callee().c_str());
+    PrintNewLine();
+
+    auto args_vec = node->args();
+    {
+      IndentScope scope2(this, "Args: {");
+      for (int i = 0; i < args_vec->size(); ++i) {
+        PrintIndented(std::to_string(i).c_str());
+        Print(":\n");
+        this->Visit(args_vec->at(i).get());
+      }
     }
+    PrintIndentedNewLine("}");
   }
-  PrintIndentedNewLine("]");
+  PrintIndentedNewLine("}");
 }
 
 void AstPrinter::VisitPrototype(const Prototype* node) {
@@ -160,12 +165,14 @@ void AstPrinter::VisitPrototype(const Prototype* node) {
 }
 
 void AstPrinter::VisitUnaryOperation(const UnaryOperation* node) {
-  IndentScope scope(this, "UnaryOperation:");
-  std::string op_info("Operator: ");
-  op_info.append(Token::TokenName(node->operator_token()));
-  PrintIndentedNewLine(op_info.c_str());
-
-  PrintIndentedVisit("TargetExpression:", node->operand());
+  {
+    IndentScope scope(this, "UnaryOperation:");
+    PrintIndented("Operator: ");
+    Print(Token::TokenName(node->operator_token()));
+    PrintNewLine();
+    PrintIndentedVisit("TargetExpression:", node->operand());
+  }
+  PrintIndented("}\n");
 }
 
 void AstPrinter::VisitFunctionDeclaration(const FunctionDeclaration* node) {

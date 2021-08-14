@@ -156,23 +156,23 @@ std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
 
 std::unique_ptr<Expression> Parser::BuildUnaryExpr(
     std::unique_ptr<Expression> expr, Token::Value val) {
-  if (expr->getType() == AstNode::kNumberLiteral) {
-    NumberLiteral* num_expr =
-        static_cast<NumberLiteral*>(expr.get());
-    if (val == Token::SUB)
-      return std::make_unique<NumberLiteral>(-num_expr->value());
-    if (val == Token::ADD)
-      return std::move(expr);
-    if (val == Token::NOT) {
-      double nv = num_expr->value();
-      return std::make_unique<NumberLiteral>(nv == 0 ? 1 : 0);
-    }
-  }
-  if (val == Token::NOT) {
-    auto zero = std::make_unique<NumberLiteral>(0);
-    auto one = std::make_unique<NumberLiteral>(1);
-    return nullptr;
-  }
+  // if (expr->getType() == AstNode::kNumberLiteral) {
+  //   NumberLiteral* num_expr =
+  //       static_cast<NumberLiteral*>(expr.get());
+  //   if (val == Token::SUB)
+  //     return std::make_unique<NumberLiteral>(-num_expr->value());
+  //   if (val == Token::ADD)
+  //     return std::move(expr);
+  //   if (val == Token::NOT) {
+  //     double nv = num_expr->value();
+  //     return std::make_unique<NumberLiteral>(nv == 0 ? 1 : 0);
+  //   }
+  // }
+  // if (val == Token::NOT) {
+  //   auto zero = std::make_unique<NumberLiteral>(0);
+  //   auto one = std::make_unique<NumberLiteral>(1);
+  //   return nullptr;
+  // }
   return std::make_unique<UnaryOperation>(val, std::move(expr));
 }
 
@@ -306,7 +306,9 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
   auto init_stmt = ParseStatement();
   auto cond_expr = ParseExpression();
   if (!Expect(Token::SEMICOLON))  return nullptr;
-  auto next_stmt = ParseStatement();
+  auto next_expr = ParseExpression();
+  auto next_stmt =
+      std::make_unique<ExpressionStatement>(std::move(next_expr));
 
   if (!Expect(Token::RPAREN)) {
     LogError("Expecting ')' in a ForLoop statement.");
