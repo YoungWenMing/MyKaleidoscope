@@ -1,81 +1,35 @@
 
-#include "src/Codegen.h"
+#include "src/Codegen-inl.h"
 #include "src/token.h"
 
 #include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
 #include "llvm/Transforms/Utils.h"
+
+#include <cstdarg>
+#include <stdio.h>
+#include <iostream>
+
 namespace Kaleidoscope {
 
-CodegenDriver::CodegenDriver(const char* src, size_t len) :
-    src_(src), parser_(src, len), ctx_() {}
+CodegenContext::CodegenContext() {
 
+  InitializeNativeTarget();
+  InitializeNativeTargetAsmPrinter();
+  InitializeNativeTargetAsmParser();
 
-void CodegenDriver::HandleToplevelExpression() {
-  // std::unique_ptr<Function> funcAst = parser_.ParseToplevelExpr();
-  // if (funcAst) {
-  //   Function* funcIR = funcAst->codegen(ctx_);
-  //   if (!funcIR)  return;
-  //   fprintf(stderr, "Read toplevel expression.");
-  //   funcIR->print(errs());
-  //   fprintf(stderr, "\n");
+  TheJIT = ExitOnErr(KaleidoscopeJIT::Create());
+  InitializeModuleAndPassManager();
 
-  //   ctx_.JITCompileToplevel(funcIR->getName().begin());
-
-  //   // remove the anonymous expression
-  // } else {
-  //   parser_.getNextToken();
-  // }
+  InitializeMainFunction();
+  InitializeMainScope();
 }
 
-void CodegenDriver::HandleExtern() {
-  std::unique_ptr<Prototype> externAst = parser_.ParseExtern();
-  if (externAst) {
-    Function* funcIR = externAst->codegen(ctx_);
-    if (!funcIR)  return;
-    fprintf(stderr, "Read extern prototype.");
-    funcIR->print(errs());
-    fprintf(stderr, "\n");
-    // record the prototype in Codegen Context
-    ctx_.add_protos(std::move(externAst));
-  } else {
-    parser_.getNextToken();
-  }
-}
-
-void CodegenDriver::HandleDefinition() {
-  // std::unique_ptr<FunctionAST> funcAst = parser_.ParseFunctionDecl();
-  // if (funcAst) {
-  //   Function* funcIR = funcAst->codegen(ctx_);
-  //   if (!funcIR)  return;
-  //   fprintf(stderr, "Read definition.");
-  //   funcIR->print(errs());
-  //   fprintf(stderr, "\n");
-
-  //   ctx_.add_module();
-  // } else {
-  //   parser_.getNextToken();
-  // }
-}
-
-void CodegenDriver::run() {
-  parser_.getNextToken();
-  while (parser_.curToken != Token::EOS) {
-    switch(parser_.curToken) {
-      case Token::DEF:
-        HandleDefinition();
-        break;
-      case Token::EXTERN:
-        HandleExtern();
-        break;
-      case Token::SEMICOLON:
-        parser_.getNextToken();
-        break;
-      default:
-        HandleToplevelExpression();
-    }
-  }
+CodegenContext::~CodegenContext() {
+  DeinitializeMainScope();
+  // FIXME: do not use unique_ptr for mainFunction.
+  MainFunction.release();
 }
 
 void CodegenContext::InitializeModuleAndPassManager() {
@@ -151,6 +105,50 @@ AllocaInst* CodegenContext::CreateEntryBlockAlloca(
   IRBuilder<> tempB(&func->getEntryBlock(), func->getEntryBlock().begin());
   return tempB.CreateAlloca(
       Type::getDoubleTy(*TheContext), 0, var_name.c_str());
+}
+
+void CodegenContext::LogError(const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  fprintf(stderr, format, args);
+  va_end(args);
+}
+
+void CodegenContext::EnsureMainFunctionTerminate() {
+  BasicBlock* last = current_block();
+  if (last->getTerminator() != nullptr) {
+    ReturnInst::Create(*TheContext, 0, last);
+  }
+}
+
+AllocaInst* ContextScope::find_val(const std::string& name) const {
+  auto entry = ValMap.find(name);
+  if (entry != ValMap.end())  return entry->second;
+  return nullptr;
+}
+
+bool ContextScope::insert_val(const std::string& name, AllocaInst* allo) {
+  auto entry = ValMap.find(name);
+  if (entry != ValMap.end()) {
+    ValMap.insert(std::pair<const std::string, AllocaInst*>(name, allo));
+    return true;
+  }
+  return false;
+}
+
+CodegenDriver::CodegenDriver(const char* src, size_t len) :
+    src_(src), parser_(src, len), ctx_() {}
+
+void CodegenDriver::run() {
+}
+
+void CodegenDriver::generate_code() {
+  std::unique_ptr<Block> root = parser_.ParseToplevel();
+  root->codegen(ctx_);
+  ctx_.EnsureMainFunctionTerminate();
+#if 1
+  ctx_.get_moduleptr()->dump();
+#endif // DEBUG
 }
 
 // Question:

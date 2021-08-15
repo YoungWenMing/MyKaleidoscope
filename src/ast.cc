@@ -1,6 +1,6 @@
 #include "src/ast.h"
 
-#include "src/Codegen.h"
+#include "src/Codegen-inl.h"
 
 namespace Kaleidoscope {
 
@@ -13,10 +13,13 @@ Value* ExpressionStatement::codegen(CodegenContext& ctx) {
 }
 
 Value* Identifier::codegen(CodegenContext& ctx) {
-  Value* val = ctx.get_valmap()[name_];
-  if (!val)
-      return LogErrorV("variable is not defined.");
-  return ctx.get_irbuilder().CreateLoad(val, name_.c_str());
+  AllocaInst* allo = ctx.find_val(name_);
+  if (allo == nullptr) {
+    ctx.LogError("Use identifier %s before declaration.\n", name_.c_str());
+    return nullptr;
+  }
+  return ctx.get_irbuilder().CreateLoad(
+      allo->getAllocatedType(), allo, name_.c_str());
 }
 
 Value* BinaryExpression::codegen(CodegenContext& ctx) {
@@ -24,7 +27,7 @@ Value* BinaryExpression::codegen(CodegenContext& ctx) {
     assert(lhs_->getType() == AstNode::kIdentifier);
     Identifier* vlhs = static_cast<Identifier*>(lhs_.get());
 
-    AllocaInst* allo = ctx.get_valmap()[vlhs->var_name()];
+    AllocaInst* allo = ctx.find_val(vlhs->var_name());
     if (allo == nullptr)
       return LogErrorV("Unknown variable name.");
 
@@ -90,11 +93,36 @@ Value* UnaryOperation::codegen(CodegenContext& ctx) {
 }
 
 Value* VariableDeclaration::codegen(CodegenContext& ctx) {
-  IRBuilder<>& builder = ctx.get_irbuilder();
-  Function* parenFn = builder.GetInsertBlock()->getParent();
-  auto nameMap = ctx.get_valmap();
+  // IRBuilder<>& builder = ctx.get_irbuilder();
+  // Function* parenFn = builder.GetInsertBlock()->getParent();
+  BasicBlock* curBB = ctx.current_block();
+  Function* parenFn = curBB->getParent();
 
-  return nullptr;
+  AllocaInst* allo = new AllocaInst(
+        Type::getDoubleTy(ctx.get_llvmcontext()),
+        0, name_.c_str(), curBB);
+
+  if (!ctx.insert_val(name_, allo))   return nullptr;
+
+  // build store instruction.
+  if (init_expr_ != nullptr) {
+    init_expr_->codegen(ctx);
+  } else {
+    // store default initial value 0.0
+    new StoreInst(ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), allo, curBB);
+    // ctx.get_irbuilder().CreateStore(
+        // ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), allo);
+  }
+
+  VariableDeclaration *next = next_.get();
+  Value* ret = static_cast<Value*>(allo);
+
+  while (next != nullptr) {
+    ret = next->codegen(ctx);
+    next = next->next_.get();
+  }
+
+  return ret;
   // AllocaInst* allo = nullptr;
   // for (auto& p : initList) {
   //   std::string& varName = p.first;
@@ -177,13 +205,12 @@ Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
   builder.SetInsertPoint(BB);
 
   // make the ValMap current context
-  auto & val_map = ctx.get_valmap();
-  val_map.clear();
+  ctx.EnterScope(BB);
   for(auto & arg : func->args()) {
     std::string arg_name = arg.getName().str();
     AllocaInst* allo = ctx.CreateEntryBlockAlloca(func, arg_name);
     builder.CreateStore(&arg, allo);
-    val_map[arg_name] = allo;
+    ctx.insert_val(arg_name, allo);
   }
   
   if (Value* retVal = body_->codegen(ctx)) {
@@ -252,12 +279,13 @@ Value* IfStatement::codegen(CodegenContext& ctx) {
 }
 
 Value* ForLoopStatement::codegen(CodegenContext& ctx) {
-  // create the loop variable's initial value
   return nullptr;
+  // create the loop variable's initial value
+  // ContextScope scope(ctx);
   // LLVMContext& Lctx = ctx.get_llvmcontext();
   // IRBuilder<>& builder = ctx.get_irbuilder();
 
-  // // BasicBlock* preBB = builder.GetInsertBlock();
+  // BasicBlock* preBB = builder.GetInsertBlock();
   // Function* parenFn = builder.GetInsertBlock()->getParent();
 
   // AllocaInst* allo = ctx.CreateEntryBlockAlloca(parenFn, var_name_);
@@ -323,8 +351,21 @@ Value* ForLoopStatement::codegen(CodegenContext& ctx) {
 }
 
 Value* Assignment::codegen(CodegenContext& ctx) {
-  
-  return nullptr;
+  if (target_->getType() != kIdentifier) {
+    ctx.LogError("Only identifiers are assignable yet.");
+    return nullptr;
+  }
+
+  AllocaInst* allo =
+      ctx.find_val(static_cast<Identifier*>(target_.get())->var_name());
+  if (allo == nullptr) {
+    ctx.LogError("Assignment before an identifier was declared.");
+    return nullptr;
+  }
+  Value* val = value_->codegen(ctx);
+  if (val == nullptr) return nullptr;
+
+  return ctx.get_irbuilder().CreateStore(val, allo);
 }
 
 Value* EmptyStatement::codegen(CodegenContext& ctx) {
@@ -336,7 +377,11 @@ Value* ReturnStatement::codegen(CodegenContext& ctx) {
 }
 
 Value* Block::codegen(CodegenContext& ctx) {
-  return nullptr;
+  Value* last = nullptr;
+  for (int i = 0; i < statements_->size(); ++i) {
+    last = statements_->at(i)->codegen(ctx);
+  }
+  return last;
 }
 
 } // Kaleidoscope 
