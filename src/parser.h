@@ -37,6 +37,7 @@ class Parser {
   Token::Value curToken = Token::UNINITIALIZED;
   PreceMap preceMap;
   UnaryOpSet unarySet;
+  bool hasParseError = false;
 
   friend class CodegenDriver;
 
@@ -85,8 +86,10 @@ class Parser {
 
   void ParseStatementsList(StmtsList& list);
 
+  bool Check(Token::Value val);
   bool Expect(Token::Value val);
 
+  void setParserError() { hasParseError = true; }
 #if DEBUG
   void LogInfo(const char* info);
 #endif
@@ -95,6 +98,8 @@ class Parser {
   Parser(const char* src, size_t len);
 
   std::unique_ptr<Block> ParseToplevel();
+
+  bool HasParserError() const { return hasParseError; }
 };
 
 } // Kaleidoscope

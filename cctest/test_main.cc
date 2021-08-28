@@ -50,9 +50,9 @@ void test_ast(const char* src) {
   printer.Visit(root_block.get());
 }
 
-void test_codegen(const char* src) {
-  CodegenDriver driver(src, strlen(src));
-  driver.run();
+void test_codegen(const char* src_name, const char* src) {
+  CodegenDriver driver(src_name, src, strlen(src));
+  driver.generate_code();
 }
 
 int main(int argc, char* argv[]) {
@@ -61,8 +61,8 @@ int main(int argc, char* argv[]) {
 
     if (buffer && strlen(buffer) != 0) {
       // test_lexer(buffer);
-      // test_codegen(buffer);
-      test_ast(buffer);
+      test_codegen(argv[1], buffer);
+      // test_ast(buffer);
     }
   }
 	// printf("%s\n", "hello world");

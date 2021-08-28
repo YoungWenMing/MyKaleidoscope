@@ -43,12 +43,14 @@ class CodegenContext {
   // for function code regeneration
   std::map<std::string, std::unique_ptr<Prototype>> FunctionProtos;
 
+  std::string SourceName;
+
   inline void InitializeMainFunction();
   inline void InitializeMainScope();
   inline void DeinitializeMainScope();
 
  public:
-  CodegenContext();
+  CodegenContext(const char* src_name);
   ~CodegenContext();
 
   LLVMContext& get_llvmcontext() { return *TheContext; }
@@ -56,6 +58,9 @@ class CodegenContext {
   IRBuilder<>& get_irbuilder() { return *Builder; }
 
   Module* get_moduleptr() { return TheModule.get(); }
+
+  ContextScope& get_current_scope() { return *current_scope_; }
+
   void InitializeModuleAndPassManager();
 
   void doOptimization(Function& func);
@@ -70,9 +75,8 @@ class CodegenContext {
 
   inline AllocaInst* find_val(const std::string& name);
   inline bool insert_val(const std::string& name, AllocaInst* val);
-  inline BasicBlock* current_block() const;
 
-  inline void EnterScope(BasicBlock*);
+  inline void EnterScope();
   inline void ExitScope();
 
   void EnsureMainFunctionTerminate();
@@ -84,17 +88,19 @@ class CodegenContext {
 };
 
 class ContextScope {
-  BasicBlock* bb_;
+  CodegenContext& ctx_;
   std::map<const std::string, AllocaInst*> ValMap;
   friend class CodegenContext;
  public:
-  ContextScope(BasicBlock* block)
-      : bb_(block) {}
-  ~ContextScope() {}
+  ContextScope(CodegenContext& ctx) : ctx_(ctx) {
+    ctx_.scope_stack_.push_back(this);
+  }
+  ~ContextScope() {
+    ctx_.scope_stack_.pop_back();
+  }
 
   AllocaInst* find_val(const std::string& name) const;
   bool        insert_val(const std::string&, AllocaInst*);
-  BasicBlock* current_block() const { return bb_; }
 };
 
 class CodegenDriver {
@@ -103,7 +109,7 @@ class CodegenDriver {
   CodegenContext ctx_;
 
  public:
-  CodegenDriver(const char* src, size_t len);
+  CodegenDriver(const char* src_name, const char* src, size_t len);
 
   void generate_code();
   void run();

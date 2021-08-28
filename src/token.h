@@ -2,7 +2,6 @@
 #define TOKEN_H
 
 #include "src/global.h"
-#include "src/util.h"
 
 #include <string>
 
@@ -66,9 +65,7 @@ class Token {
     return name_[val];
   }
 
-  static constexpr bool IsUnaryOp(Token::Value val) {
-    return IsInRange(val, Token::ADD, Token::NOT);
-  }
+  static inline constexpr bool IsUnaryOp(Token::Value val);
 
  private:
   static const uint8_t precedence_[TOKEN_NUMS];

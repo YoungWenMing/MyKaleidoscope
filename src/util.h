@@ -16,5 +16,7 @@ inline constexpr bool IsInRange(T val, U low_limit, U high_limit) {
                                  static_cast<unsigned_T>(low_limit));
 }
 
+void PrintErrorF(const char* format, ...);
+
 }
 #endif
