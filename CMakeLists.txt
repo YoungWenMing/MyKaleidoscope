@@ -72,6 +72,7 @@ include_directories(
 
 set(myparser_src
   ${CMAKE_SOURCE_DIR}/src/token.h
+  ${CMAKE_SOURCE_DIR}/src/token-inl.h
   ${CMAKE_SOURCE_DIR}/src/token.cc
   ${CMAKE_SOURCE_DIR}/src/lexer.cc
   ${CMAKE_SOURCE_DIR}/src/lexer.h
@@ -88,6 +89,9 @@ set(myparser_src
   
   ${CMAKE_SOURCE_DIR}/src/global.h
   ${CMAKE_SOURCE_DIR}/src/logging.cc
+  ${CMAKE_SOURCE_DIR}/src/util.h
+  ${CMAKE_SOURCE_DIR}/src/util.cc
+
 )
 
 add_executable(cctest

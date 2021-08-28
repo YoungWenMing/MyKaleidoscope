@@ -15,7 +15,8 @@ void CodegenContext::InitializeMainFunction() {
 
 void CodegenContext::InitializeMainScope() {
   BasicBlock* main_bb = BasicBlock::Create(*TheContext, "mainentry", MainFunction.get());
-  EnterScope(main_bb);
+  Builder->SetInsertPoint(main_bb);
+  EnterScope();
 }
 
 void CodegenContext::DeinitializeMainScope() {
@@ -34,20 +35,13 @@ bool CodegenContext::insert_val(const std::string& name, AllocaInst* val) {
   return current_scope_->insert_val(name, val);
 }
 
-void CodegenContext::EnterScope(BasicBlock* bb) {
-  ContextScope* s = new ContextScope(bb);
-  scope_stack_.push_back(s);
+void CodegenContext::EnterScope() {
+  ContextScope* s = new ContextScope(*this);
   current_scope_ = s;
 }
 
-BasicBlock* CodegenContext::current_block() const {
-  return current_scope_->current_block();
-}
-
 void CodegenContext::ExitScope() {
-  scope_stack_.pop_back();
   delete current_scope_;
-  current_scope_ = scope_stack_.back();
 }
 
 

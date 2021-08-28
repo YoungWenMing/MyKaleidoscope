@@ -1,6 +1,7 @@
 
 #include "src/parser.h"
 #include "src/Codegen.h"
+#include "src/token-inl.h"
 #include <iostream>
 
 namespace Kaleidoscope {
@@ -156,23 +157,6 @@ std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
 
 std::unique_ptr<Expression> Parser::BuildUnaryExpr(
     std::unique_ptr<Expression> expr, Token::Value val) {
-  // if (expr->getType() == AstNode::kNumberLiteral) {
-  //   NumberLiteral* num_expr =
-  //       static_cast<NumberLiteral*>(expr.get());
-  //   if (val == Token::SUB)
-  //     return std::make_unique<NumberLiteral>(-num_expr->value());
-  //   if (val == Token::ADD)
-  //     return std::move(expr);
-  //   if (val == Token::NOT) {
-  //     double nv = num_expr->value();
-  //     return std::make_unique<NumberLiteral>(nv == 0 ? 1 : 0);
-  //   }
-  // }
-  // if (val == Token::NOT) {
-  //   auto zero = std::make_unique<NumberLiteral>(0);
-  //   auto one = std::make_unique<NumberLiteral>(1);
-  //   return nullptr;
-  // }
   return std::make_unique<UnaryOperation>(val, std::move(expr));
 }
 
@@ -274,18 +258,18 @@ std::unique_ptr<Prototype> Parser::ParseExtern() {
 std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
   // eat 'if'
   getNextToken();
-  if (!Expect(Token::LPAREN)) return nullptr;
+  if (!Check(Token::LPAREN)) return nullptr;
   std::unique_ptr<Expression> cond = ParseExpression();
   if (!cond)
     return nullptr;
 
-  if (!Expect(Token::RPAREN)) return nullptr;
+  if (!Check(Token::RPAREN)) return nullptr;
   auto then_stmt = ParseStatement();
   
   if (!then_stmt) return nullptr;
 
   std::unique_ptr<Statement> else_stmt = nullptr;
-  if (Expect(Token::ELSE))
+  if (Check(Token::ELSE))
     else_stmt = ParseStatement();
 
   return std::make_unique<IfStatement>(std::move(cond),
@@ -298,19 +282,22 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
   // eat 'for'
   getNextToken();
 
-  if (!Expect(Token::LPAREN)) {
+  if (!Check(Token::LPAREN)) {
     LogError("Expecting '(' following keyword 'for' in a ForLoop statement.");
     return nullptr;
   }
  
   auto init_stmt = ParseStatement();
   auto cond_expr = ParseExpression();
-  if (!Expect(Token::SEMICOLON))  return nullptr;
-  auto next_expr = ParseExpression();
-  auto next_stmt =
-      std::make_unique<ExpressionStatement>(std::move(next_expr));
+  if (!Check(Token::SEMICOLON))  return nullptr;
 
-  if (!Expect(Token::RPAREN)) {
+  std::unique_ptr<ExpressionStatement>next_stmt = nullptr;
+  if (curToken != Token::RPAREN) {
+    auto next_expr = ParseExpression();
+    next_stmt =
+        std::make_unique<ExpressionStatement>(std::move(next_expr));
+  }
+  if (!Check(Token::RPAREN)) {
     LogError("Expecting ')' in a ForLoop statement.");
     return nullptr;
   }
@@ -379,7 +366,7 @@ std::unique_ptr<Block> Parser::ParseBlock() {
   getNextToken();
   StmtsList *slist = new StmtsList();
   ParseStatementsList(*slist);
-  if (!Expect(Token::RBRACE)) {
+  if (!Check(Token::RBRACE)) {
     LogError("Expecting '}' at the end of a block.");
     return nullptr;
   }
@@ -391,10 +378,7 @@ std::unique_ptr<Block> Parser::ParseBlock() {
 std::unique_ptr<ExpressionStatement> Parser::ParseExpressionStmt() {
   auto expr = ParseExpression();
   if (!expr)   return nullptr;
-  if (curToken != Token::SEMICOLON) {
-    LogError("Expecting a semicolon after expression.");
-    return nullptr;
-  }
+  if (!Check(Token::SEMICOLON))   return nullptr;
   return std::make_unique<ExpressionStatement>(std::move(expr));
 }
 
@@ -475,12 +459,22 @@ std::unique_ptr<Block> Parser::ParseToplevel() {
   return std::make_unique<Block>(statement_list);
 }
 
-bool Parser::Expect(Token::Value val) {
-  if (curToken == val) {
+bool Parser::Check(Token::Value val) {
+  if (Expect(val)) {
     getNextToken();
     return true;
   }
   return false;
+}
+
+bool Parser::Expect(Token::Value val) {
+  if (curToken != val) {
+    PrintErrorF("Unexpected token: %s, while the right one is %s\n",
+                Token::TokenName(curToken), Token::TokenName(val));
+    setParserError();
+    return false;
+  }
+  return true;
 }
 
 std::unique_ptr<AstNode> LogError(const char* info) {

@@ -1,6 +1,7 @@
 #include "src/ast.h"
 
 #include "src/Codegen-inl.h"
+#include "src/util.h"
 
 namespace Kaleidoscope {
 
@@ -9,13 +10,13 @@ Value* NumberLiteral::codegen(CodegenContext& ctx) {
 }
 
 Value* ExpressionStatement::codegen(CodegenContext& ctx) {
-  return nullptr;
+  return expr_->codegen(ctx);
 }
 
 Value* Identifier::codegen(CodegenContext& ctx) {
   AllocaInst* allo = ctx.find_val(name_);
   if (allo == nullptr) {
-    ctx.LogError("Use identifier %s before declaration.\n", name_.c_str());
+    PrintErrorF("Use identifier %s before declaration.\n", name_.c_str());
     return nullptr;
   }
   return ctx.get_irbuilder().CreateLoad(
@@ -23,20 +24,20 @@ Value* Identifier::codegen(CodegenContext& ctx) {
 }
 
 Value* BinaryExpression::codegen(CodegenContext& ctx) {
-  if (op_ == Token::ASSIGN) {
-    assert(lhs_->getType() == AstNode::kIdentifier);
-    Identifier* vlhs = static_cast<Identifier*>(lhs_.get());
+  // if (op_ == Token::ASSIGN) {
+  //   assert(lhs_->getType() == AstNode::kIdentifier);
+  //   Identifier* vlhs = static_cast<Identifier*>(lhs_.get());
 
-    AllocaInst* allo = ctx.find_val(vlhs->var_name());
-    if (allo == nullptr)
-      return LogErrorV("Unknown variable name.");
+  //   AllocaInst* allo = ctx.find_val(vlhs->var_name());
+  //   if (allo == nullptr)
+  //     return LogErrorV("Unknown variable name.");
 
-    Value* r = rhs_->codegen(ctx);
-    if (r == nullptr) return nullptr;
+  //   Value* r = rhs_->codegen(ctx);
+  //   if (r == nullptr) return nullptr;
 
-    ctx.get_irbuilder().CreateStore(r, allo);
-    return r;
-  }
+  //   ctx.get_irbuilder().CreateStore(r, allo);
+  //   return r;
+  // }
   Value* left = lhs_->codegen(ctx), *right = rhs_->codegen(ctx);
   IRBuilder<>& irbuilder = ctx.get_irbuilder();
   switch(op_) {
@@ -93,57 +94,33 @@ Value* UnaryOperation::codegen(CodegenContext& ctx) {
 }
 
 Value* VariableDeclaration::codegen(CodegenContext& ctx) {
-  // IRBuilder<>& builder = ctx.get_irbuilder();
-  // Function* parenFn = builder.GetInsertBlock()->getParent();
-  BasicBlock* curBB = ctx.current_block();
+  IRBuilder<>& builder = ctx.get_irbuilder();
+
+  BasicBlock* curBB = builder.GetInsertBlock();
   Function* parenFn = curBB->getParent();
 
   AllocaInst* allo = new AllocaInst(
         Type::getDoubleTy(ctx.get_llvmcontext()),
         0, name_.c_str(), curBB);
 
-  if (!ctx.insert_val(name_, allo))   return nullptr;
+  ContextScope& cur_scope = ctx.get_current_scope();
+  if (!cur_scope.insert_val(name_, allo))   return nullptr;
 
   // build store instruction.
   if (init_expr_ != nullptr) {
     init_expr_->codegen(ctx);
   } else {
     // store default initial value 0.0
-    new StoreInst(ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), allo, curBB);
-    // ctx.get_irbuilder().CreateStore(
-        // ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), allo);
+    builder.CreateStore(
+        ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), allo);
   }
 
   VariableDeclaration *next = next_.get();
   Value* ret = static_cast<Value*>(allo);
 
-  while (next != nullptr) {
-    ret = next->codegen(ctx);
-    next = next->next_.get();
-  }
+  if (next != nullptr)    next->codegen(ctx);
 
   return ret;
-  // AllocaInst* allo = nullptr;
-  // for (auto& p : initList) {
-  //   std::string& varName = p.first;
-  //   allo = new AllocaInst(
-  //       Type::getDoubleTy(ctx.get_llvmcontext()), 0, varName.c_str(), builder.GetInsertBlock());
-
-  //   Value* initVal;
-  //   if (p.second) {
-  //     initVal = p.second->codegen(ctx);
-  //     if (initVal == nullptr)
-  //       return nullptr;
-  //   } else {
-  //     initVal = ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0));
-  //   }
-  //   builder.CreateStore(initVal, allo);
-  //   // TODO: add checking for duplicate variable declaration.
-  //   nameMap[varName] = allo;
-  // }
-  // // variable declarations do not have any nontrivial value
-  // return allo != nullptr ? (Value*)allo :
-  //     ConstantFP::get(Type::getDoubleTy(ctx.get_llvmcontext()), APFloat(0.0));
 }
 
 Value* CallExpression::codegen(CodegenContext& ctx) {
@@ -204,8 +181,8 @@ Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
   IRBuilder<>& builder = ctx.get_irbuilder();
   builder.SetInsertPoint(BB);
 
-  // make the ValMap current context
-  ctx.EnterScope(BB);
+  // enter a new scope
+  ContextScope scope(ctx);
   for(auto & arg : func->args()) {
     std::string arg_name = arg.getName().str();
     AllocaInst* allo = ctx.CreateEntryBlockAlloca(func, arg_name);
@@ -270,84 +247,49 @@ Value* IfStatement::codegen(CodegenContext& ctx) {
   parenFn->getBasicBlockList().push_back(mergeBB);
   builder.SetInsertPoint(mergeBB); // phi node is eventually added to mergeBB
 
-  PHINode* pn =
-      builder.CreatePHI(Type::getDoubleTy(ctx.get_llvmcontext()), 2, "iftmp");
-  pn->addIncoming(thenV, thenBB);
-  pn->addIncoming(elseV, elseBB);
-  // use Phi node to represent the value after branch under SSA
-  return pn;
+  return mergeBB;
 }
 
 Value* ForLoopStatement::codegen(CodegenContext& ctx) {
-  return nullptr;
-  // create the loop variable's initial value
-  // ContextScope scope(ctx);
-  // LLVMContext& Lctx = ctx.get_llvmcontext();
-  // IRBuilder<>& builder = ctx.get_irbuilder();
+  LLVMContext& Lctx = ctx.get_llvmcontext();
+  IRBuilder<>& builder = ctx.get_irbuilder();
 
-  // BasicBlock* preBB = builder.GetInsertBlock();
-  // Function* parenFn = builder.GetInsertBlock()->getParent();
+  BasicBlock* preBB = builder.GetInsertBlock();
+  Function* parenFn = preBB->getParent();
+  BasicBlock* initBB = BasicBlock::Create(ctx.get_llvmcontext(), "init", parenFn);
+  BasicBlock* exitBB = BasicBlock::Create(ctx.get_llvmcontext(), "exit");
+  BasicBlock* loopBB = BasicBlock::Create(ctx.get_llvmcontext(), "loop");
 
-  // AllocaInst* allo = ctx.CreateEntryBlockAlloca(parenFn, var_name_);
-  // Value* start_val = start_->codegen(ctx);
-  // if (!start_val) return nullptr;
+  builder.CreateBr(initBB);
+  ContextScope scope(ctx);
+  builder.SetInsertPoint(initBB);
 
-  // builder.CreateStore(start_val, allo);
+  if (init_ != nullptr) {
+    init_->codegen(ctx);
+  }
 
-  // BasicBlock* loopBB =
-  //     BasicBlock::Create(Lctx, "loop", parenFn);
-  
-  // // this command create a br label 'loop'
-  // builder.CreateBr(loopBB);
-  // builder.SetInsertPoint(loopBB);
+  if (condition_ == nullptr) {
+    builder.CreateBr(loopBB);
+  } else {
+    Value* cond_val = condition_->codegen(ctx);
+    Value* cond = builder.CreateFCmpOEQ(
+        cond_val, ConstantFP::get(Lctx, APFloat(1.0)), "condition");
+    builder.CreateCondBr(cond, loopBB, exitBB);
+  }
 
-  // // this phi node is now inserted into the loopBB
-  // // PHINode* pn = builder.CreatePHI(
-  //     // Type::getDoubleTy(Lctx), 2, var_name_.c_str());
-  // // add the first branch to the phi node
-  // // pn->addIncoming(start_val, preBB);
+  parenFn->getBasicBlockList().push_back(loopBB);
+  builder.SetInsertPoint(loopBB);
+  body_->codegen(ctx);
+  if (next_ != nullptr)   next_->codegen(ctx);
 
-  // // cache the old value with identical name with loop variable
-  // AllocaInst* oldVal = ctx.get_valmap()[var_name_];
-  // ctx.get_valmap()[var_name_] = allo;
+  Value* cond_val = condition_->codegen(ctx);
+  Value* cond = builder.CreateFCmpOEQ(
+        cond_val, ConstantFP::get(Lctx, APFloat(1.0)));
+  builder.CreateCondBr(cond, loopBB, exitBB);
 
-  // if (!body_->codegen(ctx)) return nullptr;
-
-  // Value* delta;
-  // if (!step_) {
-  //   delta = ConstantFP::get(Lctx, APFloat(1.0));
-  // } else {
-  //   delta = step_->codegen(ctx);
-  //   if (!delta) return nullptr;
-  // }
-  // // load loop variable from stack
-  // Value* cur_val =
-  //     builder.CreateLoad(allo->getAllocatedType(), allo, var_name_.c_str());
-
-  // Value* next = builder.CreateFAdd(cur_val, delta, "nextvar");
-  // builder.CreateStore(next, allo);
-
-  // Value* end = end_->codegen(ctx);
-  // if (!end)   return nullptr;
-
-
-  // Value* cond = builder.CreateFCmpOEQ(
-  //     end, ConstantFP::get(Lctx, APFloat(1.0)), "condition");
-
-  // // BasicBlock* endBB = builder.GetInsertBlock();
-  // BasicBlock* postBB = BasicBlock::Create(Lctx, "postloop", parenFn);
-
-  // builder.CreateCondBr(cond, loopBB, postBB);
-
-  // builder.SetInsertPoint(postBB);
-
-  // // set the end instruction as the predecessor of this phi node
-  // // pn->addIncoming(next, endBB);
-
-  // if (oldVal)   ctx.get_valmap()[var_name_] = oldVal;
-  // else          ctx.get_valmap().erase(var_name_);
-
-  // return Constant::getNullValue(Type::getDoubleTy(Lctx));
+  parenFn->getBasicBlockList().push_back(exitBB);
+  builder.SetInsertPoint(exitBB);
+  return exitBB;
 }
 
 Value* Assignment::codegen(CodegenContext& ctx) {
@@ -356,14 +298,18 @@ Value* Assignment::codegen(CodegenContext& ctx) {
     return nullptr;
   }
 
+  const std::string& var_name = static_cast<Identifier*>(target_.get())->var_name();
   AllocaInst* allo =
-      ctx.find_val(static_cast<Identifier*>(target_.get())->var_name());
+      ctx.find_val(var_name);
   if (allo == nullptr) {
     ctx.LogError("Assignment before an identifier was declared.");
     return nullptr;
   }
   Value* val = value_->codegen(ctx);
-  if (val == nullptr) return nullptr;
+  if (val == nullptr) {
+    ctx.LogError("Invalid value in assignment for variable %s.", var_name.c_str());
+    return nullptr;
+  }
 
   return ctx.get_irbuilder().CreateStore(val, allo);
 }

@@ -13,7 +13,8 @@
 
 namespace Kaleidoscope {
 
-CodegenContext::CodegenContext() {
+CodegenContext::CodegenContext(const char* src_name)
+  : SourceName(src_name) {
 
   InitializeNativeTarget();
   InitializeNativeTargetAsmPrinter();
@@ -36,8 +37,9 @@ void CodegenContext::InitializeModuleAndPassManager() {
   // open a new module
   // this may be optimized
   TheContext = std::make_unique<LLVMContext>();
-  TheModule = std::make_unique<Module>("MYJIT", *TheContext);
+  TheModule = std::make_unique<Module>("MainModule", *TheContext);
   TheModule->setDataLayout(TheJIT->getDataLayout());
+  TheModule->setSourceFileName(SourceName);
 
   Builder = std::make_unique<IRBuilder<>>(*TheContext);
 
@@ -110,12 +112,12 @@ AllocaInst* CodegenContext::CreateEntryBlockAlloca(
 void CodegenContext::LogError(const char* format, ...) {
   va_list args;
   va_start(args, format);
-  fprintf(stderr, format, args);
+  vfprintf(stderr, format, args);
   va_end(args);
 }
 
 void CodegenContext::EnsureMainFunctionTerminate() {
-  BasicBlock* last = current_block();
+  BasicBlock* last = Builder->GetInsertBlock();
   if (last->getTerminator() != nullptr) {
     ReturnInst::Create(*TheContext, 0, last);
   }
@@ -129,21 +131,25 @@ AllocaInst* ContextScope::find_val(const std::string& name) const {
 
 bool ContextScope::insert_val(const std::string& name, AllocaInst* allo) {
   auto entry = ValMap.find(name);
-  if (entry != ValMap.end()) {
+  if (entry == ValMap.end()) {
     ValMap.insert(std::pair<const std::string, AllocaInst*>(name, allo));
     return true;
   }
   return false;
 }
 
-CodegenDriver::CodegenDriver(const char* src, size_t len) :
-    src_(src), parser_(src, len), ctx_() {}
+CodegenDriver::CodegenDriver(const char* src_name, const char* src, size_t len) :
+    src_(src), parser_(src, len), ctx_(src_name) {}
 
 void CodegenDriver::run() {
 }
 
 void CodegenDriver::generate_code() {
   std::unique_ptr<Block> root = parser_.ParseToplevel();
+  if (parser_.HasParserError()) {
+    printf("we got parser erorrs, please check your source code.\n");
+    return;
+  }
   root->codegen(ctx_);
   ctx_.EnsureMainFunctionTerminate();
 #if 1

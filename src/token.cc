@@ -9,9 +9,9 @@ const uint8_t Token::precedence_[Token::TOKEN_NUMS] = {
 };
 
 const char* const Token::name_[Token::TOKEN_NUMS] = {
-#define PICK_TOKEN_PRECEDENCE(name, string, precedence) string,
-  TOKEN_LIST(PICK_TOKEN_PRECEDENCE)
-#undef PICK_TOKEN_PRECEDENCE
+#define PICK_TOKEN_STRING(name, string, precedence) #name,
+  TOKEN_LIST(PICK_TOKEN_STRING)
+#undef PICK_TOKEN_STRING
 };
 
 } // namespace Kaleidoscope
