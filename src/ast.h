@@ -157,6 +157,7 @@ class CallExpression : public Expression {
 };
 
 class Prototype : public Expression {
+  friend class FunctionDeclaration;
   std::string name_;
   std::vector<std::string> args_;
   // store operator info and precedence

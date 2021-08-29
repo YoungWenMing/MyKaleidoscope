@@ -43,7 +43,5 @@ void CodegenContext::EnterScope() {
 void CodegenContext::ExitScope() {
   delete current_scope_;
 }
-
-
 } // Kaleidoscope 
 #endif // CODEGEN_INL_H

@@ -1,14 +1,7 @@
-# Compute
-def ifgo(x) {
-  if (x < 2)
-    return 1;
-  else
-    return ifgo(x-1) + ifgo(x-2);
+# for IfStatement testing 
+var k = 10;
+if (k > 5) {
+  k = k +7;
+} else {
+  k = k - 7;
 }
-
-def loopt() {
-  for (var t = 1; t < 10; t = t + 1) {
-    ifgo(2);
-  }
-}
-loopt();

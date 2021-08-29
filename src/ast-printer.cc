@@ -37,18 +37,21 @@ void AstPrinter::VisitEmptyStatement(const EmptyStatement* node) {
 }
 
 void AstPrinter::VisitIfStatement(const IfStatement* node) {
-  IndentScope(this, "IF:");
+  IndentScope scope(this, "IF:");
   PrintIndentedVisit("CONDITION:", node->condition());
   PrintIndentedVisit("THEN:", node->then_stmt());
   PrintIndentedVisit("ELSE:", node->else_stmt());
 }
 
 void AstPrinter::VisitForLoopStatement(const ForLoopStatement* node) {
-  IndentScope(this, "ForLoop:");
-  PrintIndentedVisit("INIT:", node->init());
-  PrintIndentedVisit("CONDITION:", node->condition());
-  PrintIndentedVisit("NEXT:", node->next());
-  PrintIndentedVisit("Body:", node->body());
+  {
+    IndentScope scope(this, "ForLoop:{");
+    PrintIndentedVisit("INIT:", node->init());
+    PrintIndentedVisit("CONDITION:", node->condition());
+    PrintIndentedVisit("NEXT:", node->next());
+    PrintIndentedVisit("Body:", node->body());
+  }
+  PrintIndented("}\n");
 }
 
 void AstPrinter::VisitBlock(const Block* node) {
