@@ -57,13 +57,27 @@ void test_codegen(const char* src_name, const char* src) {
 
 int main(int argc, char* argv[]) {
   if (argc > 1) {
-    const char* buffer = readSourceFile(argv[1]);
+    const char* buffer = readSourceFile(argv[argc - 1]);
+
+    bool CheckAST = false;
+    bool CheckCode = false;
+
+    for (int i = 1; i < argc - 1; ++i) {
+      char* arg = argv[i];
+      if (strcmp(arg, "--ast") == 0) {
+        CheckAST = true;
+      } else if (strcmp(arg, "--code") == 0) {
+        CheckCode = true;
+      }
+    }
 
     if (buffer && strlen(buffer) != 0) {
-      // test_lexer(buffer);
-      test_codegen(argv[1], buffer);
-      // test_ast(buffer);
+      if (CheckAST) {
+        test_ast(buffer);
+      }
+      if (CheckCode) {
+        test_codegen(argv[1], buffer);
+      }
     }
   }
-	// printf("%s\n", "hello world");
 }

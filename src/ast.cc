@@ -24,20 +24,6 @@ Value* Identifier::codegen(CodegenContext& ctx) {
 }
 
 Value* BinaryExpression::codegen(CodegenContext& ctx) {
-  // if (op_ == Token::ASSIGN) {
-  //   assert(lhs_->getType() == AstNode::kIdentifier);
-  //   Identifier* vlhs = static_cast<Identifier*>(lhs_.get());
-
-  //   AllocaInst* allo = ctx.find_val(vlhs->var_name());
-  //   if (allo == nullptr)
-  //     return LogErrorV("Unknown variable name.");
-
-  //   Value* r = rhs_->codegen(ctx);
-  //   if (r == nullptr) return nullptr;
-
-  //   ctx.get_irbuilder().CreateStore(r, allo);
-  //   return r;
-  // }
   Value* left = lhs_->codegen(ctx), *right = rhs_->codegen(ctx);
   IRBuilder<>& irbuilder = ctx.get_irbuilder();
   switch(op_) {
@@ -125,17 +111,21 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
 
 Value* CallExpression::codegen(CodegenContext& ctx) {
   Function* calleeFn = ctx.get_function(callee_);
-  if (!calleeFn)
-    return LogErrorV("Callee function is not defined."); // LogError here
+  if (!calleeFn) {
+    ctx.LogError("Call an undeclared function: %s.\n", callee_.c_str());
+    return nullptr;
+  }
   
-  if (calleeFn->arg_size() != args_.size())
-    return LogErrorV("Incorrect quantity of arguments for this function call");  // LogError here
+  if (calleeFn->arg_size() != args_.size()) {
+    ctx.LogError("Incorrect quantity of arguments for function: %s\n", callee_.c_str());
+    return nullptr;
+  }
   
   std::vector<Value*> ArgsV;
   for (int i = 0; i < args_.size(); ++i) {
-    ArgsV.push_back(args_[i]->codegen(ctx));
-    if (!ArgsV.back())
-      return nullptr;
+    Value* a = args_[i]->codegen(ctx);
+    if (a == nullptr) return nullptr;
+    ArgsV.push_back(a);
   }
 
   return ctx.get_irbuilder().CreateCall(calleeFn, ArgsV, "calltemp");
@@ -164,42 +154,41 @@ Function* Prototype::codegen(CodegenContext& ctx) {
 }
 
 Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
-  // get prototype from CodegenContext
-  // store the function in FunctionProtos
-  Prototype& P = *proto_; 
-  ctx.add_protos(std::move(proto_));
-  Function* func = ctx.get_function(P.getName());
-
-  if (!func)
-    return nullptr;   // LogError here
-  
-  if (!func->empty())
-    return (Function*)LogErrorV("Function cannot be redefined.");
-  
-  BasicBlock* BB = BasicBlock::Create(ctx.get_llvmcontext(), "entry", func);
-  // make BB the next insertion place
-  IRBuilder<>& builder = ctx.get_irbuilder();
-  builder.SetInsertPoint(BB);
-
-  // enter a new scope
+  // generate code for function declaration
+  // Step 1: get arguments types and function type
+  // Step 2: create Function object
+  Function* func_target = proto_->codegen(ctx);
+  // Step 3: create basic block
+  BasicBlock* funcBB = BasicBlock::Create(ctx.get_llvmcontext(),
+                                          "func_entry",
+                                          func_target);
+  IRBuilder<> tbuilder(funcBB, funcBB->begin());
   ContextScope scope(ctx);
-  for(auto & arg : func->args()) {
+  ctx.AddTempIRBuilder(&tbuilder);
+  // Step 4: initialize arguments
+  Function::arg_iterator actualArg = func_target->arg_begin();
+  for (llvm::Argument &arg : func_target->args()) {
     std::string arg_name = arg.getName().str();
-    AllocaInst* allo = ctx.CreateEntryBlockAlloca(func, arg_name);
-    builder.CreateStore(&arg, allo);
-    ctx.insert_val(arg_name, allo);
+    AllocaInst* allo = new AllocaInst(Type::getDoubleTy(ctx.get_llvmcontext()),
+                                      0, arg_name.c_str(), funcBB);
+    if (!scope.insert_val(arg_name, allo)) {
+      PrintErrorF("Redefinition of argument %s in function \"%s\"\n",
+                  arg_name.c_str(), proto_->getName().c_str());
+    }
+    tbuilder.CreateStore(&arg, allo);
   }
-  
-  if (Value* retVal = body_->codegen(ctx)) {
-    ctx.get_irbuilder().CreateRet(retVal);
-    verifyFunction(*func);
+  // Step 5: generate code for body
 
-    ctx.doOptimization(*func);
-
-    return func;
+  if (!body_->codegen(ctx)) {
+    PrintErrorF("Invalid body for function %s\n", proto_->getName().c_str());
+    return nullptr;
   }
-  func->eraseFromParent();
-  return nullptr;
+  // Step 6: create return instruction
+  if (tbuilder.GetInsertBlock()->getTerminator() == nullptr) {
+    tbuilder.CreateRet(ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)));
+  }
+  ctx.RecoverIRBuilder();
+  return func_target;
 }
 
 Value* IfStatement::codegen(CodegenContext& ctx) {
@@ -219,7 +208,7 @@ Value* IfStatement::codegen(CodegenContext& ctx) {
   BasicBlock* elseBB =
       BasicBlock::Create(ctx.get_llvmcontext(), "else");
   BasicBlock* mergeBB =
-      BasicBlock::Create(ctx.get_llvmcontext(), "ifcont");
+      BasicBlock::Create(ctx.get_llvmcontext(), "merge");
   // 1. create a condition branch selection in the current BB
   builder.CreateCondBr(cond, thenBB, elseBB);
   // 2. set insertPoint to thenBB which is already added to current funtion 
@@ -319,7 +308,12 @@ Value* EmptyStatement::codegen(CodegenContext& ctx) {
 }
 
 Value* ReturnStatement::codegen(CodegenContext& ctx) {
-  return nullptr;
+  Value* ret = expression_->codegen(ctx);
+  if (ret == nullptr) {
+    PrintErrorF("** Invalid Return Statement.**\n");
+    return nullptr;
+  }
+  return ctx.get_irbuilder().CreateRet(ret);
 }
 
 Value* Block::codegen(CodegenContext& ctx) {

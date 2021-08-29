@@ -31,6 +31,7 @@ class CodegenContext {
   std::unique_ptr<Module> TheModule;
   std::unique_ptr<Function> MainFunction;
   std::unique_ptr<IRBuilder<>> Builder;
+  IRBuilder<>* OldBuilder = nullptr;
 
   std::vector<ContextScope*> scope_stack_;
   ContextScope* current_scope_;
@@ -44,6 +45,8 @@ class CodegenContext {
   std::map<std::string, std::unique_ptr<Prototype>> FunctionProtos;
 
   std::string SourceName;
+
+  bool HasCodegenError = false;
 
   inline void InitializeMainFunction();
   inline void InitializeMainScope();
@@ -84,7 +87,22 @@ class CodegenContext {
   AllocaInst* CreateEntryBlockAlloca(
       Function* func, const std::string& var_name);
 
+  void AddCodegenError() { HasCodegenError = true; }
+  bool HasError() { return HasCodegenError; }
   void LogError(const char* format, ...);
+
+  void AddTempIRBuilder(IRBuilder<>* builder) {
+    OldBuilder = Builder.release();
+    Builder = std::unique_ptr<IRBuilder<>>(builder);
+  }
+
+  void RecoverIRBuilder() {
+    if (OldBuilder != nullptr) {
+      Builder.release();
+      Builder = std::unique_ptr<IRBuilder<>>(OldBuilder);
+      OldBuilder = nullptr;
+    }
+  }
 };
 
 class ContextScope {

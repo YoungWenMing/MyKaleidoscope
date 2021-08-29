@@ -85,10 +85,9 @@ Function* CodegenContext::get_function(std::string name) {
   if (result) return result;
 
   // check the FunctionProtos map
-  auto entry = FunctionProtos.find(name);
-  if (entry != FunctionProtos.end())
-    return entry->second->codegen(*this);
-
+  // auto entry = FunctionProtos.find(name);
+  // if (entry != FunctionProtos.end())
+  //   return entry->second->codegen(*this);
   return nullptr;
 }
 
@@ -110,6 +109,7 @@ AllocaInst* CodegenContext::CreateEntryBlockAlloca(
 }
 
 void CodegenContext::LogError(const char* format, ...) {
+  AddCodegenError();
   va_list args;
   va_start(args, format);
   vfprintf(stderr, format, args);
@@ -153,7 +153,10 @@ void CodegenDriver::generate_code() {
   root->codegen(ctx_);
   ctx_.EnsureMainFunctionTerminate();
 #if 1
-  ctx_.get_moduleptr()->dump();
+  if (ctx_.HasError())
+    printf("Error(s) occured during code generation.\n");
+  else
+    ctx_.get_moduleptr()->dump();
 #endif // DEBUG
 }
 
