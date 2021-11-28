@@ -55,6 +55,7 @@ class Parser {
   }
 
   std::unique_ptr<Expression>             ParseExpression();
+  std::unique_ptr<SmiLiteral>             ParseSmiLiteral();
   std::unique_ptr<NumberLiteral>          ParseNumberLiteral();
   std::unique_ptr<Expression>             ParseIdentifierExpr();
   std::unique_ptr<Expression>             ParseParenExpr();

@@ -45,15 +45,26 @@ Token::Value Lexer::NextToken() {
 }
 
 Token::Value Lexer::ScanNumber() {
-  AddLiteralCharAdvance();
-  // we only support decimal number here
-  uint8_t dot_num = 0;
-  while (isdigit(c0_) || c0_ == '.') {
+  uint64_t value = 0;
+  while (isdigit(c0_)) {
+    value = 10 * value + (c0_ - '0');
     AddLiteralCharAdvance();
-    if (c0_ == '.' && dot_num < 2)  ++dot_num;
   }
-  if (dot_num == 2)  return Token::ILLEGAL;
-  curToken.number_val = strtod(curToken.literal_buffer.c_str(), NULL);
+  if (IsAsciiIdentifier(c0_)) return Token::ILLEGAL;
+  if (c0_ != '.'
+      && value <= SMI_MAX_VALUE
+      && curToken.literal_buffer.size() <= 10) {
+    curToken.number_val = static_cast<uint32_t>(value);
+    return Token::SMI;
+  }
+
+  if (c0_ == '.') {
+    do {
+      AddLiteralCharAdvance();
+    } while (isdigit(c0_));
+    if (IsAsciiIdentifier(c0_)) return Token::ILLEGAL;
+  }
+
   return Token::NUMBER;
 }
 
@@ -84,6 +95,8 @@ Token::Value Lexer::ScanSingleOp() {
       return Token::SEMICOLON;
     case ',':
       return Token::COMMA;
+    case '.':
+      return Token::PERIOD;
     case '=':
       return Token::ASSIGN;
     case '|':
@@ -109,8 +122,10 @@ void Lexer::PrintCurrentToken(std::ostream& os) {
   }
   if (curToken.value == Token::IDENTIFIER)
     os << ", String: " << curToken.literal_buffer;
+  else if (curToken.value == Token::SMI)
+    os << ", Smi: " << SmiVal();
   else if (curToken.value == Token::NUMBER)
-    os << ", Number: " << curToken.number_val;
+    os << ", Number: " << NumberVal();
   os << " ]";
 }
 

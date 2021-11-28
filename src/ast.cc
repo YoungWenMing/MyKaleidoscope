@@ -5,6 +5,10 @@
 
 namespace Kaleidoscope {
 
+Value* SmiLiteral::codegen(CodegenContext& ctx) {
+  return ConstantInt::get(ctx.get_llvmcontext(), APInt(32, val_));
+}
+
 Value* NumberLiteral::codegen(CodegenContext& ctx) {
   return ConstantFP::get(ctx.get_llvmcontext(), APFloat(val_));
 }
@@ -25,25 +29,62 @@ Value* Identifier::codegen(CodegenContext& ctx) {
 
 Value* BinaryExpression::codegen(CodegenContext& ctx) {
   Value* left = lhs_->codegen(ctx), *right = rhs_->codegen(ctx);
+
+  if (left == nullptr || right == nullptr) {
+    ctx.LogError("Got invalid value for binary operation.");
+    return nullptr;
+  }
+
   IRBuilder<>& irbuilder = ctx.get_irbuilder();
+  // support float and int
+  auto rType = right->getType();
+  bool r_is_double = rType->isDoubleTy();
+  bool is_same_ty = rType == left->getType();
+
+  if (!is_same_ty) {
+    Type* doubleTy = Type::getDoubleTy(ctx.get_llvmcontext());
+    if (r_is_double) {
+      auto op = CastInst::getCastOpcode(left, true, doubleTy, true);
+      left = irbuilder.CreateCast(op, left, doubleTy, "castdb");
+    } else {
+      auto op = CastInst::getCastOpcode(right, true, doubleTy, true);
+      right = irbuilder.CreateCast(op, right, doubleTy, "castdb");
+    }
+  }
+
+
   switch(op_) {
     case Token::ADD:
       // create float add
-      return irbuilder.CreateFAdd(left, right, "addtmp");
+      return r_is_double?
+                irbuilder.CreateFAdd(left, right, "addtmp") :
+                irbuilder.CreateAdd(left, right, "addtmp");
     case Token::SUB:
-      return irbuilder.CreateFSub(left, right, "subtmp");
+      return r_is_double?
+                irbuilder.CreateFSub(left, right, "subtmp") :
+                irbuilder.CreateSub(left, right, "subtmp");
     case Token::MUL:
-      return irbuilder.CreateFMul(left, right, "multmp");
+      return r_is_double?
+                irbuilder.CreateFMul(left, right, "multmp") :
+                irbuilder.CreateMul(left, right, "multmp");
     case Token::DIV:
-      return irbuilder.CreateFDiv(left, right, "divtmp");
-    case Token::LT:
-      left = irbuilder.CreateFCmpULT(left, right, "lttmp");
+      return r_is_double?
+                irbuilder.CreateFDiv(left, right, "divtmp"):
+                irbuilder.CreateSDiv(left, right, "divtmp");
+    case Token::LT:{
+      Value *val = r_is_double?
+                irbuilder.CreateFCmpULT(left, right, "lttmp") :
+                irbuilder.CreateICmpULT(left, right, "lttmp");
       return irbuilder.CreateUIToFP(
-          left, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
-    case Token::GT:
-      left = irbuilder.CreateFCmpUGT(left, right, "gttmp");
+          val, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
+    }
+    case Token::GT:{
+      Value *val = r_is_double?
+                irbuilder.CreateFCmpUGT(left, right, "gttmp") :
+                irbuilder.CreateICmpUGT(left, right, "gttmp");
       return irbuilder.CreateUIToFP(
-          left, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
+          val, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
+    }
     default:
       break;
   }
@@ -85,9 +126,17 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
   BasicBlock* curBB = builder.GetInsertBlock();
   Function* parenFn = curBB->getParent();
 
-  AllocaInst* allo = new AllocaInst(
+  // TODO(yang): cover different types, including string\boolean
+  AllocaInst* allo;
+  if (init_expr_->valueType() == kSmiLiteral) {
+    allo = new AllocaInst(
+        Type::getInt32Ty(ctx.get_llvmcontext()),
+        0, name_.c_str(), curBB);
+  } else {
+    allo = new AllocaInst(
         Type::getDoubleTy(ctx.get_llvmcontext()),
         0, name_.c_str(), curBB);
+  }
 
   ContextScope& cur_scope = ctx.get_current_scope();
   if (!cur_scope.insert_val(name_, allo))   return nullptr;

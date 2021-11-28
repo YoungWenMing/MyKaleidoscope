@@ -18,6 +18,13 @@ int Parser::getOpsPrecedence(Token::Value token) {
   return Token::Precedence(token);
 }
 
+std::unique_ptr<SmiLiteral> Parser::ParseSmiLiteral() {
+  std::unique_ptr<SmiLiteral> result
+      = std::make_unique<SmiLiteral>(lexer_.SmiVal());
+  getNextToken();
+  return result;
+}
+
 std::unique_ptr<NumberLiteral> Parser::ParseNumberLiteral() {
   std::unique_ptr<NumberLiteral> result =
       std::make_unique<NumberLiteral>(lexer_.NumberVal());
@@ -74,6 +81,8 @@ std::unique_ptr<Expression> Parser::ParseParenExpr() {
 
 std::unique_ptr<Expression> Parser::ParsePrimary() {
   switch (curToken) {
+    case Token::SMI:
+      return ParseSmiLiteral();
     case Token::NUMBER:
       return ParseNumberLiteral();
     case Token::IDENTIFIER:

@@ -2,6 +2,6 @@
 
 ## Building Steps
 - Configure LLVM path
-``` cmake -DCMAKE_BUILD_TYPE=Debug  -DLLVM_DIR=/Your/Paht/to/LLVM/lib/cmake/llvm . ```
+``` cmake -DCMAKE_BUILD_TYPE=Debug  -DLLVM_DIR=/Your/Path/to/LLVM/lib/cmake/llvm . ```
 - Build
 ``` make -j4```

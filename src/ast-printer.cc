@@ -97,6 +97,12 @@ void AstPrinter::VisitIdentifier(const Identifier* node) {
   Print("\n");
 }
 
+void AstPrinter::VisitSmiLiteral(const SmiLiteral* node) {
+  IndentScope scope(this, "SmiLiteral:");
+  PrintIndented(std::to_string(node->value()).c_str());
+  PrintNewLine();
+}
+
 void AstPrinter::VisitNumberLiteral(const NumberLiteral* node) {
   IndentScope scope(this, "NumberLiteral:");
   PrintIndented(std::to_string(node->value()).c_str());

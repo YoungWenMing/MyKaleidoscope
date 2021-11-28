@@ -18,4 +18,6 @@ void FATAL(const char* info);
 #define DCHECK(condition)   ((void)0)
 #endif
 
+static const uint32_t SMI_MAX_VALUE = 0x7fffffff;
+
 #endif // GLOBAL_H
