@@ -17,7 +17,11 @@ class Lexer {
   void Reinitialize(const char* src);
 
   Token::Value NextToken();
-  double NumberVal() { return curToken.number_val; }
+  uint32_t SmiVal()   { return curToken.number_val; }
+  double NumberVal() {
+    return strtod(curToken.literal_buffer.c_str(), nullptr);
+  }
+
   std::string& IdentifierStr() { return curToken.literal_buffer; }
 
   void PrintCurrentToken(std::ostream&os);
@@ -25,7 +29,7 @@ class Lexer {
  private:
   void advance();
   struct TokenDesc {
-    double number_val;
+    uint32_t number_val;
     std::string literal_buffer;
     Token::Value value = Token::UNINITIALIZED;
   };

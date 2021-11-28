@@ -92,6 +92,7 @@ class CodegenContext {
   void LogError(const char* format, ...);
 
   void AddTempIRBuilder(IRBuilder<>* builder) {
+    // TODO: consider recursive calling to this function.
     OldBuilder = Builder.release();
     Builder = std::unique_ptr<IRBuilder<>>(builder);
   }

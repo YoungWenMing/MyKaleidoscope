@@ -39,7 +39,9 @@ namespace Kaleidoscope {
   T(RBRACE,     "}",        0)                    \
   T(SEMICOLON,  ";",        0)                    \
   T(COMMA,      ",",        0)                    \
+  T(PERIOD,     ".",        0)                    \
   T(ASSIGN,     "=",        1)                    \
+  T(SMI,        nullptr,    0)                    \
   T(NUMBER,     nullptr,    0)                    \
   T(IDENTIFIER, nullptr,    0)                    \
   KEYWORD_LIST(T)                                 \

@@ -39,7 +39,8 @@ using llvm::Value;
 
 
 #define EXPRESSION_NODE_LIST(V)         \
-  V(Identifier)                 \
+  V(Identifier)                         \
+  V(SmiLiteral)                         \
   V(NumberLiteral)                      \
   V(BinaryExpression)                   \
   V(UnaryExpression)                    \
@@ -104,6 +105,19 @@ class Identifier : public Expression {
     name_(name) {}
   Value* codegen(CodegenContext& ctx) override;
   const std::string& var_name() const { return name_; }
+};
+
+class SmiLiteral : public Expression {
+ public:
+  SmiLiteral(uint32_t val) :
+    Expression(kSmiLiteral), val_(val) {}
+
+  virtual ~SmiLiteral() = default;
+  Value* codegen(CodegenContext& ctx) override;
+  uint32_t value() const { return val_; }
+
+ private:
+  uint32_t val_;
 };
 
 class NumberLiteral : public Expression {
@@ -276,6 +290,7 @@ class Assignment : public Expression {
   Value* codegen(CodegenContext& ctx) override;
   const Expression* target() const { return target_.get(); }
   const Expression* value() const { return value_.get(); }
+  ASTType valueType() const { return value_->getType();}
 };
 
 class VariableDeclaration : public Statement {
