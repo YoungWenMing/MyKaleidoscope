@@ -46,11 +46,14 @@ class CodegenContext {
 
   std::string SourceName;
 
+  Type* llvm_type_map_[Token::TOKEN_TYPES_NUM];
+
   bool HasCodegenError = false;
 
   inline void InitializeMainFunction();
   inline void InitializeMainScope();
   inline void DeinitializeMainScope();
+  inline void InitLLVMTypeMap();
 
  public:
   CodegenContext(const char* src_name);
@@ -90,20 +93,10 @@ class CodegenContext {
   void AddCodegenError() { HasCodegenError = true; }
   bool HasError() { return HasCodegenError; }
   void LogError(const char* format, ...);
+  inline Type* get_llvm_type(Token::Value token);
 
-  void AddTempIRBuilder(IRBuilder<>* builder) {
-    // TODO: consider recursive calling to this function.
-    OldBuilder = Builder.release();
-    Builder = std::unique_ptr<IRBuilder<>>(builder);
-  }
-
-  void RecoverIRBuilder() {
-    if (OldBuilder != nullptr) {
-      Builder.release();
-      Builder = std::unique_ptr<IRBuilder<>>(OldBuilder);
-      OldBuilder = nullptr;
-    }
-  }
+  inline void AddTempIRBuilder(IRBuilder<>* builder);
+  inline void RecoverIRBuilder();
 };
 
 class ContextScope {

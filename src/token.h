@@ -7,7 +7,13 @@
 
 namespace Kaleidoscope {
 
+#define TYPE_KEYWORD_LITE(T)                      \
+  T(INT,        "int",      0)                    \
+  T(DOUBLE,     "double",   0)                    \
+  T(VOID,       "void",     0)
+
 #define KEYWORD_LIST(T)                           \
+  TYPE_KEYWORD_LITE(T)                            \
   T(DEF,        "def",      0)                    \
   T(EXTERN,     "extern",   0)                    \
   T(IF,         "if",       0)                    \
@@ -37,6 +43,7 @@ namespace Kaleidoscope {
   T(RPAREN,     ")",        0)                    \
   T(LBRACE,     "{",        0)                    \
   T(RBRACE,     "}",        0)                    \
+  T(COLON,      ":",        0)                    \
   T(SEMICOLON,  ";",        0)                    \
   T(COMMA,      ",",        0)                    \
   T(PERIOD,     ".",        0)                    \
@@ -55,7 +62,7 @@ class Token {
  public:
   enum Value : uint8_t {
 #define VALUE_LIST(name, str, precedence) name,
-  TOKEN_LIST(VALUE_LIST) TOKEN_NUMS
+  TOKEN_LIST(VALUE_LIST) TOKEN_NUMS, TOKEN_TYPES_NUM = DEF
 #undef VALUE_LIST
   };
 
@@ -68,6 +75,8 @@ class Token {
   }
 
   static inline constexpr bool IsUnaryOp(Token::Value val);
+  static inline constexpr bool IsParamType(Token::Value val);
+  static inline constexpr bool IsType(Token::Value val);
 
  private:
   static const uint8_t precedence_[TOKEN_NUMS];

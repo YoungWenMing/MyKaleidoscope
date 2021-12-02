@@ -179,7 +179,7 @@ std::unique_ptr<Expression> Parser::ParseExpression() {
 }
 
 // prototype
-//   ::= id '(' id* ')'
+//   ::= id '(' type id* ')' : ret_type
 std::unique_ptr<Prototype> Parser::ParsePrototype() {
   bool isOp = false;
   if (curToken != Token::IDENTIFIER) {
@@ -221,22 +221,36 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
   getNextToken();
 
   std::vector<std::string> args_;
-  while (curToken == Token::IDENTIFIER) {
+  std::vector<Token::Value> arg_types_;
+  while (true) {
+    if (!Token::IsParamType(curToken))
+      return LogErrorP("[Parsing Error] Expecting a type specifier.");
+    arg_types_.push_back(curToken);
+
+    getNextToken();
+    if (curToken != Token::IDENTIFIER)
+      return LogErrorP("[Parsing Error] Expecting an identifier after type specifier.");
+
     args_.push_back(lexer_.IdentifierStr());
     getNextToken();
 
     // eat comma directly
     if (curToken == Token::COMMA)
       getNextToken();
+    else if(curToken == Token::RPAREN)
+      break;
   }
 
-  if (curToken != Token::RPAREN)
-    return LogErrorP("[Parsing Error] Expecting an identifier here.");
   // eat ')'
   getNextToken();
-  return precedence != -1? 
-            std::make_unique<Prototype>(FnName, args_, precedence, Op) :
-            std::make_unique<Prototype>(FnName, args_);
+  if (curToken == Token::COLON) {
+    // eat ':'
+    getNextToken();
+    return Token::IsType(curToken) ?
+        std::make_unique<Prototype>(FnName, args_, arg_types_, curToken) :
+        LogErrorP("[Parseing Error] Expecting a type specifier after ':'.");
+  }
+  return std::make_unique<Prototype>(FnName, args_, arg_types_);
 }
 
 std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDecl() {

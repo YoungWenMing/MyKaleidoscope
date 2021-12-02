@@ -182,12 +182,12 @@ Value* CallExpression::codegen(CodegenContext& ctx) {
 
 Function* Prototype::codegen(CodegenContext& ctx) {
   // all arguments are double type
-  std::vector<Type*> doubles(args_.size(),
-                             Type::getDoubleTy(ctx.get_llvmcontext()));
+  std::vector<Type*> types(arg_types_.size(), nullptr);
+  for (size_t i = 0; i < arg_types_.size(); ++i)
+    types[i] = ctx.get_llvm_type(arg_types_[i]);
   
   // both return value and all arguments are of double type
-  FunctionType* funcTy = FunctionType::get(
-      Type::getDoubleTy(ctx.get_llvmcontext()), doubles, false);
+  FunctionType* funcTy = FunctionType::get(ctx.get_llvm_type(ret_type_), types, false);
   
   // with function type, name and the module we are talking about
   // we create a function in thie module, so that we can find it.

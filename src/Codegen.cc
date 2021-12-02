@@ -25,6 +25,7 @@ CodegenContext::CodegenContext(const char* src_name)
 
   InitializeMainFunction();
   InitializeMainScope();
+  InitLLVMTypeMap();
 }
 
 CodegenContext::~CodegenContext() {
