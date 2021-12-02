@@ -171,9 +171,12 @@ class CallExpression : public Expression {
 };
 
 class Prototype : public Expression {
+ private:
   friend class FunctionDeclaration;
   std::string name_;
   std::vector<std::string> args_;
+  std::vector<Token::Value> arg_types_;
+  Token::Value ret_type_;
   // store operator info and precedence
   uint32_t flags = 0;
   static constexpr int kPrecedenceOffset = 8;
@@ -181,18 +184,23 @@ class Prototype : public Expression {
 
  public:
   Prototype(const std::string& name,
-               std::vector<std::string> args) :
+            std::vector<std::string> args,
+            std::vector<Token::Value> arg_types,
+            Token::Value retTy = Token::VOID) :
       Expression(kPrototype),
-      name_(name), args_(std::move(args)) {}
+      name_(name),
+      args_(std::move(args)),
+      arg_types_(std::move(arg_types)),
+      ret_type_(retTy) {}
   
-  Prototype(const std::string& name,
-               std::vector<std::string> args,
-               uint32_t precedence, Token::Value token)
-      : Prototype(name, args)
-         {
-    flags = ((precedence & 0xFF) << kPrecedenceOffset) & 1;
-    flags |= (token & 0xFF) << kTokenValueOffset;
-  }
+  // Prototype(const std::string& name,
+  //              std::vector<std::string> args,
+  //              uint32_t precedence, Token::Value token)
+  //     : Prototype(name, args)
+  //        {
+  //   flags = ((precedence & 0xFF) << kPrecedenceOffset) & 1;
+  //   flags |= (token & 0xFF) << kTokenValueOffset;
+  // }
 
   const std::string& getName() const {
     return name_;

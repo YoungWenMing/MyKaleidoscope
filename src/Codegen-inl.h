@@ -19,6 +19,12 @@ void CodegenContext::InitializeMainScope() {
   EnterScope();
 }
 
+void CodegenContext::InitLLVMTypeMap() {
+  llvm_type_map_[Token::INT]     =  Type::getInt32Ty(get_llvmcontext());
+  llvm_type_map_[Token::DOUBLE]  =  Type::getDoubleTy(get_llvmcontext());
+  llvm_type_map_[Token::VOID]    =  Type::getVoidTy(get_llvmcontext());
+}
+
 void CodegenContext::DeinitializeMainScope() {
   ExitScope();
 }
@@ -42,6 +48,25 @@ void CodegenContext::EnterScope() {
 
 void CodegenContext::ExitScope() {
   delete current_scope_;
+}
+
+Type* CodegenContext::get_llvm_type(Token::Value token) {
+  DCHECK(Token::IsType(token));
+  return llvm_type_map_[token];
+}
+
+void CodegenContext::AddTempIRBuilder(IRBuilder<>* builder) {
+  // TODO: consider recursive calling to this function.
+  OldBuilder = Builder.release();
+  Builder = std::unique_ptr<IRBuilder<>>(builder);
+}
+
+void CodegenContext::RecoverIRBuilder() {
+  if (OldBuilder != nullptr) {
+    Builder.release();
+    Builder = std::unique_ptr<IRBuilder<>>(OldBuilder);
+    OldBuilder = nullptr;
+  }
 }
 } // Kaleidoscope 
 #endif // CODEGEN_INL_H

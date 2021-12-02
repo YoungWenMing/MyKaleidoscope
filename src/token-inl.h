@@ -10,5 +10,13 @@ constexpr bool Token::IsUnaryOp(Token::Value val) {
   return IsInRange(val, Token::ADD, Token::NOT);
 }
 
+constexpr bool Token::IsParamType(Token::Value val) {
+  return IsInRange(val, Token::INT, Token::DOUBLE);
+}
+
+constexpr bool Token::IsType(Token::Value val) {
+  return IsInRange(val, Token::INT, Token::VOID);
+}
+ 
 } // Kaleidoscope 
 #endif // TOKEN_INL_H
