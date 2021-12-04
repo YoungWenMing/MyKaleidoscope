@@ -332,9 +332,11 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
 }
 
 // Variable Declaration
-// var a = 1, b, c;
+// int a = 1, b, c;
+// double t = 10;
 std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
   // eat keyword 'var'
+  Token::Value decl_type = curToken;
   getNextToken();
 
   typedef std::pair<std::string, std::unique_ptr<AstNode>> SEpair;
@@ -344,21 +346,21 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
 
   while (true) {
     if (curToken != Token::IDENTIFIER) {
-      LogError("Expecting an identifier after keyword 'var'.");
+      LogError("Expecting an identifier after a type specifier or a comma.");
       return nullptr;
     }
 
     std::string var_name(getIdentifierStr());
-    std::unique_ptr<Assignment> assign = nullptr;
+    std::unique_ptr<Expression> init_val = nullptr;
     // eat variable's id string
     getNextToken();
     if (curToken == Token::ASSIGN) {
       // eat '='
-      std::unique_ptr<Identifier> target =
-          std::make_unique<Identifier>(var_name);
-      assign = ParseAssignment(std::move(target));
+      getNextToken();
+      init_val = ParseExpression();
     }
-    auto temp = std::make_unique<VariableDeclaration>(var_name, std::move(assign));
+    auto temp = std::make_unique<VariableDeclaration>(var_name,
+                                                      decl_type, std::move(init_val));
     if (decl == nullptr) {
       decl = std::unique_ptr<VariableDeclaration>(temp.release());
       current = decl.get();
@@ -376,7 +378,7 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
       getNextToken();
       return decl;
     } else {
-      LogError("Expecting an initializer expression or ',' after variable name.");
+      LogError("Expecting an initializer expression, ',' or ';' after variable name.");
       return nullptr;
     }
   }
@@ -422,6 +424,7 @@ std::unique_ptr<ReturnStatement> Parser::ParseReturnStatement() {
   DCHECK(curToken == Token::SEMICOLON);
   // eat ';'
   getNextToken();
+  // TODO(yang): distinguish empty expression or error
   return std::make_unique<ReturnStatement>(std::move(expr));
 }
 
@@ -454,7 +457,8 @@ std::unique_ptr<Statement> Parser::ParseStatement() {
     case Token::SEMICOLON:
       result = ParseEmptyStatement();
       break;
-    case Token::VAR:
+    case Token::INT:
+    case Token::DOUBLE:
       result = ParseVariableDecl();
       break;
     default:

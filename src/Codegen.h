@@ -93,6 +93,7 @@ class CodegenContext {
   void AddCodegenError() { HasCodegenError = true; }
   bool HasError() { return HasCodegenError; }
   void LogError(const char* format, ...);
+  Value* get_default_value(Token::Value token);
   inline Type* get_llvm_type(Token::Value token);
 
   inline void AddTempIRBuilder(IRBuilder<>* builder);

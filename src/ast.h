@@ -66,7 +66,7 @@ class AstNode {
 
   virtual Value* codegen(CodegenContext& ctx) = 0;
   ASTType getType() const { return type_; }
- private:
+ protected:
   ASTType type_;
 };
 
@@ -80,6 +80,13 @@ class Expression : public AstNode {
  public:
   Expression(ASTType type) : AstNode(type) {}
   virtual ~Expression() = default;
+#define IS_SOME_EXPR_FUNC(type)             \
+  bool Is##type() const {                   \
+    return type_ == k##type;                \
+  }
+  EXPRESSION_NODE_LIST(IS_SOME_EXPR_FUNC)
+
+#undef IS_SOME_EXPR_FUNC
 };
 
 
@@ -303,14 +310,17 @@ class Assignment : public Expression {
 
 class VariableDeclaration : public Statement {
   std::string name_;
-  std::unique_ptr<Assignment> init_expr_;
+  Token::Value decl_type_;
+  std::unique_ptr<Expression> init_val_;
   std::unique_ptr<VariableDeclaration> next_ = nullptr;
  public:
   VariableDeclaration(std::string& var_name,
-      std::unique_ptr<Assignment> init_expr)
+      Token::Value decl_type,
+      std::unique_ptr<Expression> init_val)
       : Statement(kVariableDeclaration),
         name_(var_name),
-        init_expr_(std::move(init_expr)) {}
+        decl_type_(decl_type),
+        init_val_(std::move(init_val)) {}
   Value* codegen(CodegenContext& ctx) override;
 
   void set_next(std::unique_ptr<VariableDeclaration> next) {
@@ -322,8 +332,8 @@ class VariableDeclaration : public Statement {
   const std::string& var_name() const {
     return name_;
   }
-  const Assignment* assignment() const {
-    return init_expr_.get();
+  const Expression* init_val() const {
+    return init_val_.get();
   }
 };
 
