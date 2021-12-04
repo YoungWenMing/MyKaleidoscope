@@ -13,6 +13,7 @@ typedef std::unordered_map<std::string, Token::Value> TokenMap;
   S("binary")                       \
   G('d')                            \
   S("def")                          \
+  S("double")                       \
   G('e')                            \
   S("extern")                       \
   S("else")                         \
@@ -21,12 +22,13 @@ typedef std::unordered_map<std::string, Token::Value> TokenMap;
   G('i')                            \
   S("if")                           \
   S("in")                           \
+  S("int")                          \
   G('r')                            \
   S("return")                       \
   G('u')                            \
   S("unary")                        \
   G('v')                            \
-  S("var")
+  S("void")
 
 
 template<int N>

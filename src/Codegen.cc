@@ -117,6 +117,17 @@ void CodegenContext::LogError(const char* format, ...) {
   va_end(args);
 }
 
+Value* CodegenContext::get_default_value(Token::Value val) {
+  switch (val) {
+    case Token::INT:
+      return ConstantInt::get(get_llvmcontext(), APInt(32, 0));
+    case Token::DOUBLE:
+      return ConstantFP::get(get_llvmcontext(), APFloat(0.0));
+    default:
+      return nullptr;
+  }
+}
+
 void CodegenContext::EnsureMainFunctionTerminate() {
   BasicBlock* last = Builder->GetInsertBlock();
   if (last->getTerminator() != nullptr) {

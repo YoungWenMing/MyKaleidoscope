@@ -22,7 +22,6 @@ namespace Kaleidoscope {
   T(IN,         "in",       0)                    \
   T(UNARY,      "unary",    0)                    \
   T(BINARY,     "binary",   0)                    \
-  T(VAR,        "var",      0)                    \
   T(RETURN,     "return",   0)
 
 #define BINARY_OP_LIST(T)                         \

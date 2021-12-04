@@ -79,8 +79,8 @@ void AstPrinter::VisitVariableDeclaration(const VariableDeclaration* node) {
     while (node != nullptr) {
       PrintIndented(node->var_name().c_str());
       Print(": {");
-      if (node->assignment() != nullptr) {
-        PrintIndentedVisit("", node->assignment());
+      if (node->init_val() != nullptr) {
+        PrintIndentedVisit("", node->init_val());
       }
       Print("\n");
       PrintIndentedNewLine("},");

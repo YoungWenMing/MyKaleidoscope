@@ -127,28 +127,45 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
   Function* parenFn = curBB->getParent();
 
   // TODO(yang): cover different types, including string\boolean
-  AllocaInst* allo;
-  if (init_expr_->valueType() == kSmiLiteral) {
-    allo = new AllocaInst(
-        Type::getInt32Ty(ctx.get_llvmcontext()),
-        0, name_.c_str(), curBB);
-  } else {
-    allo = new AllocaInst(
-        Type::getDoubleTy(ctx.get_llvmcontext()),
-        0, name_.c_str(), curBB);
-  }
+  Type* declTy = ctx.get_llvm_type(decl_type_);
+  AllocaInst* allo = new AllocaInst(declTy, 0, name_.c_str(), curBB);
+  // if (init_expr_->valueType() == kSmiLiteral) {
+  //   allo = new AllocaInst(
+  //       Type::getInt32Ty(ctx.get_llvmcontext()),
+  //       0, name_.c_str(), curBB);
+  // } else {
+  //   allo = new AllocaInst(
+  //       Type::getDoubleTy(ctx.get_llvmcontext()),
+  //       0, name_.c_str(), curBB);
+  // }
 
   ContextScope& cur_scope = ctx.get_current_scope();
-  if (!cur_scope.insert_val(name_, allo))   return nullptr;
-
-  // build store instruction.
-  if (init_expr_ != nullptr) {
-    init_expr_->codegen(ctx);
-  } else {
-    // store default initial value 0.0
-    builder.CreateStore(
-        ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), allo);
+  if (!cur_scope.insert_val(name_, allo)) {
+    ctx.LogError("Redeclaration of variable '%s'.", name_.c_str());
+    return nullptr;
   }
+
+  Value* init_val;
+  // build store instruction.
+  if (init_val_ != nullptr) {
+    init_val = init_val_->codegen(ctx);
+    if (init_val != nullptr && init_val->getType() != declTy) {
+      if (decl_type_ == Token::DOUBLE) {
+        // need casting from int to double
+        Type* doubleTy = Type::getDoubleTy(ctx.get_llvmcontext());
+        auto op = CastInst::getCastOpcode(init_val, true, doubleTy, true);
+        init_val = builder.CreateCast(op, init_val, doubleTy, "castdb");
+      } else {
+        ctx.LogError("Incompatible type of variable %s.", name_.c_str());
+        return nullptr;
+      }
+    } else {
+      return nullptr;
+    }
+  } else {
+    init_val = ctx.get_default_value(decl_type_);
+  }
+  builder.CreateStore(init_val, allo);
 
   VariableDeclaration *next = next_.get();
   Value* ret = static_cast<Value*>(allo);
@@ -227,14 +244,26 @@ Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
     tbuilder.CreateStore(&arg, allo);
   }
   // Step 5: generate code for body
-
-  if (!body_->codegen(ctx)) {
+  auto body_val = body_->codegen(ctx);
+  if (body_val == nullptr) {
     PrintErrorF("Invalid body for function %s\n", proto_->getName().c_str());
     return nullptr;
   }
   // Step 6: create return instruction
   if (tbuilder.GetInsertBlock()->getTerminator() == nullptr) {
-    tbuilder.CreateRet(ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)));
+    if (func_target->getReturnType()->isVoidTy()) {
+      tbuilder.CreateRetVoid();
+    } else {
+      ctx.LogError("Function %s must has a return statement.",
+                   proto_->getName().c_str());
+      return nullptr;
+    }
+  }
+
+  if (body_val->getType() != func_target->getReturnType()) {
+    ctx.LogError("Function %s returns an incompatible type.",
+                 proto_->getName().c_str());
+    return nullptr;
   }
   ctx.RecoverIRBuilder();
   return func_target;
@@ -357,6 +386,8 @@ Value* EmptyStatement::codegen(CodegenContext& ctx) {
 }
 
 Value* ReturnStatement::codegen(CodegenContext& ctx) {
+  if (expression_ == nullptr)
+    return ctx.get_irbuilder().CreateRetVoid();
   Value* ret = expression_->codegen(ctx);
   if (ret == nullptr) {
     PrintErrorF("** Invalid Return Statement.**\n");
