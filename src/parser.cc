@@ -6,6 +6,13 @@
 
 namespace Kaleidoscope {
 
+#define RECORD_ERR_AND_RETURN_NULL(message)         \
+  { const Location loc(lexer_.current_location());  \
+    recordError(message                             \
+                ": at %d:%d", loc.line, loc.col);   \
+    return nullptr;                                 \
+  }
+
 
 Parser::Parser(const Script& script) :
     lexer_(script) {}
@@ -70,10 +77,8 @@ std::unique_ptr<Expression> Parser::ParseParenExpr() {
   getNextToken();
   auto expr = ParseExpression();
 
-  if (curToken != Token::RPAREN) {
-    LogError("[Parsing Error] Expecting a ')'.");
-    return nullptr;
-  }
+  if (curToken != Token::RPAREN)
+    RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a right parenthesis.")
 
   getNextToken();
   return expr;
@@ -90,7 +95,8 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
     case Token::LPAREN:
       return ParseParenExpr();
     default:
-      LogError("[Parsing Error] unknown token when parsing an expression.");
+      RECORD_ERR_AND_RETURN_NULL(
+          "[Parsing Error] unknown token when parsing an expression.")
       return nullptr;
   }
 }
@@ -98,10 +104,9 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
 std::unique_ptr<Assignment>
     Parser::ParseAssignment(std::unique_ptr<Expression> lhs) {
   // eat assign operator
-  if (lhs->getType() != AstNode::kIdentifier) {
-    LogError("Only variables is assignable.");
-    return nullptr;
-  }
+  if (lhs->getType() != AstNode::kIdentifier)
+    RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting an identifer")
+
   getNextToken();
   auto value = ParseExpression();
   return std::make_unique<Assignment>(std::move(lhs), std::move(value));
@@ -125,10 +130,8 @@ std::unique_ptr<Expression> Parser::ParseBinopRhs(
     // parse the next primary expression first
     // 1 + +3 or 1 + -3 is also valid
     std::unique_ptr<Expression> rhs = ParseUnaryExpr();
-    if (rhs == nullptr) {
-      LogError("[Parsing Error] Expecting a primary expression.");
-      return nullptr;
-    }
+    if (rhs == nullptr)
+      RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a primary expression.");
 
     int next_prec = getOpsPrecedence(curToken);
 
@@ -194,7 +197,7 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
     if (curToken == Token::BINARY || curToken == Token::UNARY)
       isOp = true;
     else
-      return LogErrorP("[Parsing Error] Expecting an identifier here.");
+      RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting an identifier")
   }
 
   std::string FnName(lexer_.IdentifierStr());
@@ -223,26 +226,21 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
   }
 
   if (curToken != Token::LPAREN)
-    return LogErrorP("[Parsing Error] Expecting a left parenthesis '(' here.");
-
+    RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a left parenthesis")
   // eat the left parenthesis of function def
   getNextToken();
 
   std::vector<std::string> args_;
   std::vector<Token::Value> arg_types_;
   while (true) {
-    if (!Token::IsParamType(curToken)) {
-      const Location loc(lexer_.current_location());
-      recordError("[Parsing Error] Expecting a type specifier at %d:%d.", loc.line, loc.col);
-      return nullptr;
-    }
+    if (!Token::IsParamType(curToken))
+      RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a type specifier")
+
     arg_types_.push_back(curToken);
 
     getNextToken();
-    if (curToken != Token::IDENTIFIER) {
-      recordError("[Parsing Error] Expecting an identifier after type specifier.");
-      return nullptr;
-    }
+    if (curToken != Token::IDENTIFIER)
+      RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting an identifier")
 
     args_.push_back(lexer_.IdentifierStr());
     getNextToken();
@@ -259,12 +257,8 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
   if (curToken == Token::COLON) {
     // eat ':'
     getNextToken();
-    if (!Token::IsType(curToken)) {
-      const Location loc(lexer_.current_location());
-      recordError("[Parsing Error] Expecting a type specifier after ':' -- at %d:%d.",
-                  loc.line, loc.col);
-      return nullptr;
-    }
+    if (!Token::IsType(curToken))
+      RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a type specifier")
     return std::make_unique<Prototype>(FnName, args_, arg_types_, curToken);
   }
   return std::make_unique<Prototype>(FnName, args_, arg_types_);
@@ -322,10 +316,8 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
   // eat 'for'
   getNextToken();
 
-  if (!Check(Token::LPAREN)) {
-    recordError("Expecting '(' following keyword 'for' in a ForLoop statement.");
-    return nullptr;
-  }
+  if (!Check(Token::LPAREN))
+    RECORD_ERR_AND_RETURN_NULL("Expecting '(' following keyword 'for' in a ForLoop statement.")
  
   auto init_stmt = ParseStatement();
   auto cond_expr = ParseExpression();
@@ -337,10 +329,8 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
     next_stmt =
         std::make_unique<ExpressionStatement>(std::move(next_expr));
   }
-  if (!Check(Token::RPAREN)) {
-    recordError("Expecting ')' in a ForLoop statement.");
-    return nullptr;
-  }
+  if (!Check(Token::RPAREN))
+    RECORD_ERR_AND_RETURN_NULL("Expecting ')' in a ForLoop statement.")
 
   auto body = ParseStatement();
   if (body == nullptr)  return nullptr;
@@ -362,11 +352,10 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
   VariableDeclaration* current = nullptr;
 
   while (true) {
-    if (curToken != Token::IDENTIFIER) {
-      LogError("Expecting an identifier after a type specifier or a comma.");
-      return nullptr;
-    }
-
+    if (curToken != Token::IDENTIFIER)
+      RECORD_ERR_AND_RETURN_NULL(
+          "Expecting an identifier after a type specifier or a comma.")
+    
     std::string var_name(getIdentifierStr());
     std::unique_ptr<Expression> init_val = nullptr;
     // eat variable's id string
@@ -394,10 +383,9 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
       // eat ';'
       getNextToken();
       return decl;
-    } else {
-      LogError("Expecting an initializer expression, ',' or ';' after variable name.");
-      return nullptr;
-    }
+    } else
+      RECORD_ERR_AND_RETURN_NULL("Expecting an initializer expression,"
+                                 "',' or ';' after variable name.")
   }
 }
 
@@ -408,10 +396,8 @@ std::unique_ptr<Block> Parser::ParseBlock() {
   getNextToken();
   StmtsList *slist = new StmtsList();
   ParseStatementsList(*slist);
-  if (!Check(Token::RBRACE)) {
-    LogError("Expecting '}' at the end of a block.");
-    return nullptr;
-  }
+  if (!Check(Token::RBRACE))
+    RECORD_ERR_AND_RETURN_NULL("Expecting '}' at the end of a block.")
   return std::make_unique<Block>(slist);
 }
 
@@ -535,5 +521,7 @@ std::unique_ptr<Prototype> LogErrorP(const char* info) {
   std::cerr << info << std::endl;
   return nullptr;
 }
+
+#undef RECORD_ERR_AND_RETURN_NULL
 
 } // namespace Kaleidoscope
