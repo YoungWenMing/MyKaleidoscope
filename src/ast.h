@@ -382,7 +382,7 @@ class AstVisitor {
     this->impl()->Visit##NodeType(                    \
         static_cast<const NodeType*>(node));  break;
 
-#define AST_VISITOR_BIG_SWITCH()              \
+#define AST_VISITOR_BIG_SWITCH()                      \
   switch(node->getType()) {                           \
   AST_TYPE_LIST(AST_VISIT_CASAES)                     \
   default:  UNREACHABLE();}
@@ -390,7 +390,7 @@ class AstVisitor {
 #define DECLARE_VISITOR_FUNC(AstNode)                 \
   void Visit##AstNode(AstNode *node);
 
-#define DECLARE_VISITOR_FUNC_CONST(AstNode)                 \
+#define DECLARE_VISITOR_FUNC_CONST(AstNode)           \
   void Visit##AstNode(const AstNode *node);
 
 

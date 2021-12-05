@@ -8,6 +8,7 @@
 
 using Kaleidoscope::Token;
 using Kaleidoscope::Lexer;
+using Kaleidoscope::Script;
 using Kaleidoscope::Parser;
 using Kaleidoscope::AstNode;
 using Kaleidoscope::AstPrinter;
@@ -31,20 +32,20 @@ const char* readSourceFile(const char* path) {
 }
 
 void test_lexer(const char* src) {
-  Lexer lexer(src, strlen(src));
+  Script script(src, strlen(src));
+  Lexer lexer(script);
   // int tok;
   Token::Value tok;
   do {
     tok = lexer.NextToken();
     lexer.PrintCurrentToken(std::cout);
-    // tok = lexer.next_token();
-    // Lexer::print_token(std::cout, lexer, tok);
     std::cout << std::endl;
   } while (tok != Token::EOS);
 }
 
 void test_ast(const char* src) {
-  Parser parser(src, strlen(src));
+  Script script(src, strlen(src));
+  Parser parser(script);
   std::unique_ptr<AstNode> root_block = parser.ParseToplevel();
   AstPrinter printer;
   printer.Visit(root_block.get());

@@ -8,11 +8,12 @@
 
 namespace Kaleidoscope {
 
-Lexer::Lexer(const char* src, size_t len)
-	: src_start_(src),
-		src_cursor_(src),
-    src_end_(src + len),
-    c0_(' ') {}
+Lexer::Lexer(const Script& script)
+  : src_start_(script.source()),
+  	src_cursor_(src_start_),
+    src_end_(src_start_ + script.length()),
+    c0_(' '),
+    script_(script) {}
 
 void Lexer::Reinitialize(const char* src) {
   src_start_ = src_cursor_ = src;

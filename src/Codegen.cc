@@ -151,7 +151,7 @@ bool ContextScope::insert_val(const std::string& name, AllocaInst* allo) {
 }
 
 CodegenDriver::CodegenDriver(const char* src_name, const char* src, size_t len) :
-    src_(src), parser_(src, len), ctx_(src_name) {}
+    script_(src, len), parser_(script_), ctx_(src_name) {}
 
 void CodegenDriver::run() {
 }
@@ -159,7 +159,7 @@ void CodegenDriver::run() {
 void CodegenDriver::generate_code() {
   std::unique_ptr<Block> root = parser_.ParseToplevel();
   if (parser_.HasParserError()) {
-    printf("we got parser erorrs, please check your source code.\n");
+    printf("\nWe got parser erorrs, please check your source code.\n");
     return;
   }
   root->codegen(ctx_);
