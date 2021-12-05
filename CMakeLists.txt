@@ -78,6 +78,8 @@ set(myparser_src
   ${CMAKE_SOURCE_DIR}/src/token.cc
   ${CMAKE_SOURCE_DIR}/src/lexer.cc
   ${CMAKE_SOURCE_DIR}/src/lexer.h
+  ${CMAKE_SOURCE_DIR}/src/script.h
+  ${CMAKE_SOURCE_DIR}/src/script.cc
   ${CMAKE_SOURCE_DIR}/src/ast.h
   ${CMAKE_SOURCE_DIR}/src/ast.cc
   ${CMAKE_SOURCE_DIR}/src/ast-printer.h

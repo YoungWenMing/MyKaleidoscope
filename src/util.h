@@ -3,6 +3,7 @@
 
 #include <type_traits>
 #include <assert.h>
+#include "stdarg.h"
 
 namespace Kaleidoscope {
 
@@ -17,6 +18,6 @@ inline constexpr bool IsInRange(T val, U low_limit, U high_limit) {
 }
 
 void PrintErrorF(const char* format, ...);
-
+void VPrintError(const char* format, va_list args);
 }
 #endif

@@ -38,6 +38,7 @@ class Parser {
   PreceMap preceMap;
   UnaryOpSet unarySet;
   bool hasParseError = false;
+  int errNums = 0;
 
   friend class CodegenDriver;
 
@@ -53,6 +54,8 @@ class Parser {
   void setOpsPrecedence(Token::Value token, uint32_t prece) {
     preceMap[token] = prece;
   }
+
+  void recordError(const char* format, ...);
 
   std::unique_ptr<Expression>             ParseExpression();
   std::unique_ptr<SmiLiteral>             ParseSmiLiteral();
@@ -96,11 +99,11 @@ class Parser {
 #endif
 
  public:
-  Parser(const char* src, size_t len);
+  Parser(const Script& script);
 
   std::unique_ptr<Block> ParseToplevel();
 
-  bool HasParserError() const { return hasParseError; }
+  bool HasParserError() const { return errNums != 0; }
 };
 
 } // Kaleidoscope

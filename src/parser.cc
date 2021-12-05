@@ -7,8 +7,8 @@
 namespace Kaleidoscope {
 
 
-Parser::Parser(const char* src, size_t len) :
-    lexer_(src, len) {}
+Parser::Parser(const Script& script) :
+    lexer_(script) {}
 
 int Parser::getOpsPrecedence(Token::Value token) {
   auto entry = preceMap.find(token);
@@ -169,6 +169,14 @@ std::unique_ptr<Expression> Parser::BuildUnaryExpr(
   return std::make_unique<UnaryOperation>(val, std::move(expr));
 }
 
+void Parser::recordError(const char* format, ...) {
+  ++errNums;
+  va_list args;
+  va_start(args, format);
+  VPrintError(format, args);
+  va_end(args);
+}
+
 std::unique_ptr<Expression> Parser::ParseExpression() {
   std::unique_ptr<Expression> lhs = ParseUnaryExpr();
   if (!lhs)   return lhs;
@@ -223,13 +231,18 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
   std::vector<std::string> args_;
   std::vector<Token::Value> arg_types_;
   while (true) {
-    if (!Token::IsParamType(curToken))
-      return LogErrorP("[Parsing Error] Expecting a type specifier.");
+    if (!Token::IsParamType(curToken)) {
+      const Location loc(lexer_.current_location());
+      recordError("[Parsing Error] Expecting a type specifier at %d:%d.", loc.line, loc.col);
+      return nullptr;
+    }
     arg_types_.push_back(curToken);
 
     getNextToken();
-    if (curToken != Token::IDENTIFIER)
-      return LogErrorP("[Parsing Error] Expecting an identifier after type specifier.");
+    if (curToken != Token::IDENTIFIER) {
+      recordError("[Parsing Error] Expecting an identifier after type specifier.");
+      return nullptr;
+    }
 
     args_.push_back(lexer_.IdentifierStr());
     getNextToken();
@@ -246,9 +259,13 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
   if (curToken == Token::COLON) {
     // eat ':'
     getNextToken();
-    return Token::IsType(curToken) ?
-        std::make_unique<Prototype>(FnName, args_, arg_types_, curToken) :
-        LogErrorP("[Parseing Error] Expecting a type specifier after ':'.");
+    if (!Token::IsType(curToken)) {
+      const Location loc(lexer_.current_location());
+      recordError("[Parsing Error] Expecting a type specifier after ':' -- at %d:%d.",
+                  loc.line, loc.col);
+      return nullptr;
+    }
+    return std::make_unique<Prototype>(FnName, args_, arg_types_, curToken);
   }
   return std::make_unique<Prototype>(FnName, args_, arg_types_);
 }
@@ -306,7 +323,7 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
   getNextToken();
 
   if (!Check(Token::LPAREN)) {
-    LogError("Expecting '(' following keyword 'for' in a ForLoop statement.");
+    recordError("Expecting '(' following keyword 'for' in a ForLoop statement.");
     return nullptr;
   }
  
@@ -321,7 +338,7 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
         std::make_unique<ExpressionStatement>(std::move(next_expr));
   }
   if (!Check(Token::RPAREN)) {
-    LogError("Expecting ')' in a ForLoop statement.");
+    recordError("Expecting ')' in a ForLoop statement.");
     return nullptr;
   }
 

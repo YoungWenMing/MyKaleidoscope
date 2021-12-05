@@ -117,7 +117,8 @@ class ContextScope {
 };
 
 class CodegenDriver {
-  const char* src_;
+  // const char* src_;
+  Script script_;
   Parser parser_;
   CodegenContext ctx_;
 

@@ -5,6 +5,7 @@
 #include <iostream>
 
 #include "src/token.h"
+#include "src/script.h"
 
 namespace Kaleidoscope {
 
@@ -12,7 +13,7 @@ class Lexer {
  public:
   static const int kEndOfSource = -1;
 
-  Lexer(const char* src, size_t len);
+  Lexer(const Script& script);
 
   void Reinitialize(const char* src);
 
@@ -25,6 +26,10 @@ class Lexer {
   std::string& IdentifierStr() { return curToken.literal_buffer; }
 
   void PrintCurrentToken(std::ostream&os);
+  int current_pos() const { return src_cursor_ - src_start_; }
+  const Location current_location() const {
+    return script_.get_location(current_pos());
+  }
 
  private:
   void advance();
@@ -47,6 +52,8 @@ class Lexer {
   const char* src_start_;
   const char* src_cursor_;
   const char* src_end_;
+
+  const Script& script_;
 
   char c0_;
   TokenDesc curToken;

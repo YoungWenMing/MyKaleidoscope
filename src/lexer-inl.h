@@ -145,11 +145,7 @@ void Lexer::AdvanceUntil(FunctionType fn) {
     src_cursor_, src_end_, [&fn](char c){
       return fn(c);
   });
-  if (src_cursor_ == src_end_)  c0_ = kEndOfSource;
-  else {
-    c0_ = *src_cursor_;
-    ++src_cursor_;
-  }
+  advance();
 }
 
 void Lexer::advance() {
