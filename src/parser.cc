@@ -9,7 +9,7 @@ namespace Kaleidoscope {
 #define RECORD_ERR_AND_RETURN_NULL(message)         \
   { const Location loc(lexer_.current_location());  \
     recordError(message                             \
-                ": at %d:%d", loc.line, loc.col);   \
+                ": at %d:%d\n", loc.line, loc.col);   \
     return nullptr;                                 \
   }
 
@@ -259,7 +259,10 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
     getNextToken();
     if (!Token::IsType(curToken))
       RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a type specifier")
-    return std::make_unique<Prototype>(FnName, args_, arg_types_, curToken);
+    auto res = std::make_unique<Prototype>(FnName, args_, arg_types_, curToken);
+    // eat return type specifier
+    getNextToken();
+    return std::move(res);
   }
   return std::make_unique<Prototype>(FnName, args_, arg_types_);
 }

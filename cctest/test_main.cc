@@ -62,6 +62,7 @@ int main(int argc, char* argv[]) {
 
     bool CheckAST = false;
     bool CheckCode = false;
+    bool CheckToken = false;
 
     for (int i = 1; i < argc - 1; ++i) {
       char* arg = argv[i];
@@ -69,6 +70,8 @@ int main(int argc, char* argv[]) {
         CheckAST = true;
       } else if (strcmp(arg, "--code") == 0) {
         CheckCode = true;
+      } else if (strcmp(arg, "--token") == 0) {
+        CheckToken = true;
       }
     }
 
@@ -77,7 +80,10 @@ int main(int argc, char* argv[]) {
         test_ast(buffer);
       }
       if (CheckCode) {
-        test_codegen(argv[1], buffer);
+        test_codegen(argv[argc - 1], buffer);
+      }
+      if (CheckToken) {
+        test_lexer(buffer);
       }
     }
   }

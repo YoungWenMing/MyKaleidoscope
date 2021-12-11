@@ -1,13 +1,12 @@
-def sum(a, b) {
+def sum(int a, int b): int {
   return  a + b;
 }
 
-def traverse(b) {
-  var k = 10;
-  for (var t = 1; t < k; t = t +1) {
-    k = k + t;
+def traverse(int k): int {
+  for (int t = 1; t < 10; t = t + 1) {
+    k = k + 10;
   }
   return k;
 }
-sum(10, 20);
+int zz = sum(10, 20);
 traverse(7);
