@@ -29,7 +29,6 @@ CodegenContext::CodegenContext(const char* src_name)
 }
 
 CodegenContext::~CodegenContext() {
-  DeinitializeMainScope();
   // FIXME: do not use unique_ptr for mainFunction.
   MainFunction.release();
 }
@@ -157,6 +156,7 @@ void CodegenDriver::run() {
 }
 
 void CodegenDriver::generate_code() {
+  ContextScope scope(ctx_);
   std::unique_ptr<Block> root = parser_.ParseToplevel();
   if (parser_.HasParserError()) {
     printf("\nWe got parser erorrs, please check your source code.\n");

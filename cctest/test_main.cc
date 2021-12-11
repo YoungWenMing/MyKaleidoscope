@@ -2,7 +2,7 @@
 #include <fstream>
 
 #include "src/lexer.h"
-#include "src/Codegen.h"
+#include "src/Codegen-inl.h"
 #include "src/token.h"
 #include "src/ast-printer.h"
 

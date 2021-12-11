@@ -141,7 +141,7 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
 
   ContextScope& cur_scope = ctx.get_current_scope();
   if (!cur_scope.insert_val(name_, allo)) {
-    ctx.LogError("Redeclaration of variable '%s'.", name_.c_str());
+    ctx.LogError("Redeclaration of variable '%s'.\n", name_.c_str());
     return nullptr;
   }
 
@@ -224,7 +224,6 @@ Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
   // Step 1: get arguments types and function type
   // Step 2: create Function object
   Function* func_target = proto_->codegen(ctx);
-  std::cout << " after prototype codegen" << std::endl;
   // Step 3: create basic block
   BasicBlock* funcBB = BasicBlock::Create(ctx.get_llvmcontext(),
                                           "func_entry",
