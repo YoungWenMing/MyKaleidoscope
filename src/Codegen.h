@@ -25,7 +25,6 @@ std::vector<std::map<std::string, AllocaInst*>> ScopeStack;
 
 class ContextScope;
 class CodegenContext {
-  friend class ContextScope;
 
   std::unique_ptr<LLVMContext> TheContext;
   std::unique_ptr<Module> TheModule;
@@ -52,7 +51,6 @@ class CodegenContext {
 
   inline void InitializeMainFunction();
   inline void InitializeMainScope();
-  inline void DeinitializeMainScope();
   inline void InitLLVMTypeMap();
 
  public:
@@ -82,7 +80,7 @@ class CodegenContext {
   inline AllocaInst* find_val(const std::string& name);
   inline bool insert_val(const std::string& name, AllocaInst* val);
 
-  inline void EnterScope();
+  inline void EnterScope(ContextScope* scp);
   inline void ExitScope();
 
   void EnsureMainFunctionTerminate();
@@ -106,10 +104,10 @@ class ContextScope {
   friend class CodegenContext;
  public:
   ContextScope(CodegenContext& ctx) : ctx_(ctx) {
-    ctx_.scope_stack_.push_back(this);
+    ctx_.EnterScope(this);
   }
   ~ContextScope() {
-    ctx_.scope_stack_.pop_back();
+    ctx_.ExitScope();
   }
 
   AllocaInst* find_val(const std::string& name) const;

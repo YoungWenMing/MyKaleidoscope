@@ -16,17 +16,12 @@ void CodegenContext::InitializeMainFunction() {
 void CodegenContext::InitializeMainScope() {
   BasicBlock* main_bb = BasicBlock::Create(*TheContext, "mainentry", MainFunction.get());
   Builder->SetInsertPoint(main_bb);
-  EnterScope();
 }
 
 void CodegenContext::InitLLVMTypeMap() {
   llvm_type_map_[Token::INT]     =  Type::getInt32Ty(get_llvmcontext());
   llvm_type_map_[Token::DOUBLE]  =  Type::getDoubleTy(get_llvmcontext());
   llvm_type_map_[Token::VOID]    =  Type::getVoidTy(get_llvmcontext());
-}
-
-void CodegenContext::DeinitializeMainScope() {
-  ExitScope();
 }
 
 AllocaInst* CodegenContext::find_val(const std::string& name) {
@@ -41,13 +36,15 @@ bool CodegenContext::insert_val(const std::string& name, AllocaInst* val) {
   return current_scope_->insert_val(name, val);
 }
 
-void CodegenContext::EnterScope() {
-  ContextScope* s = new ContextScope(*this);
-  current_scope_ = s;
+void CodegenContext::EnterScope(ContextScope* scp) {
+  scope_stack_.push_back(scp);
+  current_scope_ = scp;
 }
 
 void CodegenContext::ExitScope() {
-  delete current_scope_;
+  scope_stack_.pop_back();
+  current_scope_ = scope_stack_.empty() ?
+                      nullptr : scope_stack_.back();
 }
 
 Type* CodegenContext::get_llvm_type(Token::Value token) {

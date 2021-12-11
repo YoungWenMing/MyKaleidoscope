@@ -8,5 +8,5 @@ def traverse(int k): int {
   }
   return k;
 }
-int zz = sum(10, 20);
+int t = sum(10, 20);
 traverse(7);
