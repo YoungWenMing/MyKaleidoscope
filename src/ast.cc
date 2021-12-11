@@ -224,6 +224,7 @@ Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
   // Step 1: get arguments types and function type
   // Step 2: create Function object
   Function* func_target = proto_->codegen(ctx);
+  std::cout << " after prototype codegen" << std::endl;
   // Step 3: create basic block
   BasicBlock* funcBB = BasicBlock::Create(ctx.get_llvmcontext(),
                                           "func_entry",
@@ -235,7 +236,7 @@ Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
   Function::arg_iterator actualArg = func_target->arg_begin();
   for (llvm::Argument &arg : func_target->args()) {
     std::string arg_name = arg.getName().str();
-    AllocaInst* allo = new AllocaInst(Type::getDoubleTy(ctx.get_llvmcontext()),
+    AllocaInst* allo = new AllocaInst(arg.getType(),
                                       0, arg_name.c_str(), funcBB);
     if (!scope.insert_val(arg_name, allo)) {
       PrintErrorF("Redefinition of argument %s in function \"%s\"\n",
@@ -260,8 +261,9 @@ Function* FunctionDeclaration::codegen(CodegenContext& ctx) {
     }
   }
 
+  // Here is an assumption that only the last statement can be a return statement.
   if (body_val->getType() != func_target->getReturnType()) {
-    ctx.LogError("Function %s returns an incompatible type.",
+    ctx.LogError("Function %s returns an incompatible type.\n",
                  proto_->getName().c_str());
     return nullptr;
   }
@@ -393,7 +395,8 @@ Value* ReturnStatement::codegen(CodegenContext& ctx) {
     PrintErrorF("** Invalid Return Statement.**\n");
     return nullptr;
   }
-  return ctx.get_irbuilder().CreateRet(ret);
+  ctx.get_irbuilder().CreateRet(ret);
+  return ret;
 }
 
 Value* Block::codegen(CodegenContext& ctx) {
