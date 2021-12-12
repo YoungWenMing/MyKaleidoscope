@@ -56,13 +56,25 @@ void test_codegen(const char* src_name, const char* src) {
   driver.generate_code();
 }
 
+void print_helper() {
+  std::cout << " Usage: \n"
+            << "   cctest [option] target_code_file.kal \n"
+            << " Options:\n"
+            << "   --token : print all tokens.\n"
+            << "   --ast   : print the AST structur.\n"
+            << "   --code  : print readable llvm IR.\n"
+            << "   --help  : print this doc (for short : -h)\n"
+            << std::endl;
+}
+
 int main(int argc, char* argv[]) {
   if (argc > 1) {
     const char* buffer = readSourceFile(argv[argc - 1]);
 
-    bool CheckAST = false;
-    bool CheckCode = false;
-    bool CheckToken = false;
+    bool CheckAST       = false;
+    bool CheckCode      = false;
+    bool CheckToken     = false;
+    bool PrintHelpDoc   = false;
 
     for (int i = 1; i < argc - 1; ++i) {
       char* arg = argv[i];
@@ -72,10 +84,17 @@ int main(int argc, char* argv[]) {
         CheckCode = true;
       } else if (strcmp(arg, "--token") == 0) {
         CheckToken = true;
+      } else if (strcmp(arg, "--help") == 0
+                 || strcmp(arg, "-h") == 0) {
+        PrintHelpDoc = true;
       }
     }
 
     if (buffer && strlen(buffer) != 0) {
+      if (PrintHelpDoc) {
+        print_helper();
+        return 0;
+      }
       if (CheckAST) {
         test_ast(buffer);
       }

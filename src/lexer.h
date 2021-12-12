@@ -43,6 +43,7 @@ class Lexer {
   inline void AddLiteralCharAdvance();
   inline void ResetDesc();
   inline Token::Value ScanIdentifierOrKeyword();
+  inline Token::Value Select(Token::Value tok);
   Token::Value ScanNumber();
   Token::Value ScanSingleOp();
 

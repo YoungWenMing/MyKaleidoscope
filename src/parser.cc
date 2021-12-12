@@ -1,6 +1,6 @@
 
 #include "src/parser.h"
-#include "src/Codegen.h"
+#include "src/Codegen-inl.h"
 #include "src/token-inl.h"
 #include <iostream>
 
@@ -152,7 +152,8 @@ std::unique_ptr<Expression> Parser::ParseBinopRhs(
 ///   ::= primary
 ///   ::= '!' unary
 std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
-  if (!Token::IsUnaryOp(curToken))  return ParsePrimary();
+  // TODO(yang): both unary op and count op must be considered
+  if (!Token::IsUnaryOp(curToken))  return ParsePostfixExpr();
 
   Token::Value op = curToken;
   getNextToken();
@@ -172,6 +173,37 @@ std::unique_ptr<Expression> Parser::BuildUnaryExpr(
   return std::make_unique<UnaryOperation>(val, std::move(expr));
 }
 
+std::unique_ptr<Expression> Parser::ParsePostfixExpr() {
+  auto expr = ParseLeftHandSideExpr();
+  if (!Token::IsCount(curToken)) return std::move(expr);
+  // build operation for INC and DEC
+  auto result = std::make_unique<CountOperation>(
+                    curToken, true, std::move(expr));
+  getNextToken();   // consume '++' or '--'
+  return std::move(result);
+}
+
+std::unique_ptr<Expression> Parser::ParseLeftHandSideExpr() {
+  auto expr = ParseMemberExpr();
+  if (!Token::IsPropertyOrCall(curToken))  return std::move(expr);
+  UNIMPLEMENTED();
+}
+
+// Member Expression:
+//   PrinmaryExpr
+//      '[' Expression ']' | '.' Identifier
+std::unique_ptr<Expression> Parser::ParseMemberExpr() {
+  auto expr = ParsePrimary();
+  if (!Token::IsProperty(curToken)) return std::move(expr);
+  return ParseMemberExprContinuation(std::move(expr));
+}
+
+std::unique_ptr<Expression> Parser::ParseMemberExprContinuation(
+    std::unique_ptr<Expression> expr) {
+  UNIMPLEMENTED();
+  return nullptr;
+}
+
 void Parser::recordError(const char* format, ...) {
   ++errNums;
   va_list args;
@@ -186,6 +218,7 @@ std::unique_ptr<Expression> Parser::ParseExpression() {
 
   if (curToken == Token::ASSIGN)
     return ParseAssignment(std::move(lhs));
+  // TODO(yang): consider post-increment-symbol
   return ParseBinopRhs(0, std::move(lhs));
 }
 

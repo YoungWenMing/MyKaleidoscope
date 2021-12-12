@@ -5,6 +5,8 @@
 
 namespace Kaleidoscope {
 
+using llvm::getLoadStorePointerOperand;
+
 Value* SmiLiteral::codegen(CodegenContext& ctx) {
   return ConstantInt::get(ctx.get_llvmcontext(), APInt(32, val_));
 }
@@ -129,15 +131,6 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
   // TODO(yang): cover different types, including string\boolean
   Type* declTy = ctx.get_llvm_type(decl_type_);
   AllocaInst* allo = new AllocaInst(declTy, 0, name_.c_str(), curBB);
-  // if (init_expr_->valueType() == kSmiLiteral) {
-  //   allo = new AllocaInst(
-  //       Type::getInt32Ty(ctx.get_llvmcontext()),
-  //       0, name_.c_str(), curBB);
-  // } else {
-  //   allo = new AllocaInst(
-  //       Type::getDoubleTy(ctx.get_llvmcontext()),
-  //       0, name_.c_str(), curBB);
-  // }
 
   ContextScope& cur_scope = ctx.get_current_scope();
   if (!cur_scope.insert_val(name_, allo)) {
@@ -195,6 +188,33 @@ Value* CallExpression::codegen(CodegenContext& ctx) {
   }
 
   return ctx.get_irbuilder().CreateCall(calleeFn, ArgsV, "calltemp");
+}
+
+Value* CountOperation::codegen(CodegenContext& ctx) {
+  IRBuilder<> &builder = ctx.get_irbuilder();
+  BasicBlock *curBB = builder.GetInsertBlock();
+
+  Value* right_val = expr_->codegen(ctx);
+  Value* left_val = getLoadStorePointerOperand(right_val);
+  if (left_val == nullptr) {
+    ctx.LogError("Illegal target of Count Operation -- it must be a left value.");
+    return nullptr;
+  }
+
+  Type *ty = right_val->getType();
+  CHECK(ty->isIntegerTy() || ty->isDoubleTy());
+  int delta = tok_ == Token::INC ? 1 : -1;
+  Value *delta_val = nullptr;
+  if (ty->isIntegerTy())
+    delta_val = ConstantInt::get(ctx.get_llvmcontext(), APInt(32, delta));
+  else
+    delta_val = ConstantFP::get(ctx.get_llvmcontext(), APFloat((double)delta));
+
+  Value *post_val = ty->isIntegerTy() ?
+                      builder.CreateAdd(right_val, delta_val, "inc_op") :
+                      builder.CreateFAdd(right_val, delta_val, "inc_op");
+  builder.CreateStore(post_val, left_val);
+  return is_postfix_? right_val : post_val;
 }
 
 Function* Prototype::codegen(CodegenContext& ctx) {
