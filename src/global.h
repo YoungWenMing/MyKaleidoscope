@@ -11,12 +11,14 @@ typedef unsigned int    uint32_t;
 void FATAL(const char* info);
 
 #define UNREACHABLE() FATAL("unreachable code.")
+#define UNIMPLEMENTED() FATAL("unimplemented logic.")
 
 #if DEBUG
 #define DCHECK(condition)   assert(condition)
 #else
 #define DCHECK(condition)   ((void)0)
 #endif
+#define CHECK(condition)    assert(condition)
 
 static const uint32_t SMI_MAX_VALUE = 0x7fffffff;
 

@@ -157,6 +157,18 @@ void AstPrinter::VisitCallExpression(const CallExpression* node) {
   PrintIndentedNewLine("}");
 }
 
+void AstPrinter::VisitCountOperation(const CountOperation* node) {
+  IndentScope scope(this, "CountOperation:");
+  PrintIndented("Operation: ");
+  Print(Token::TokenName(node->get_operator()));
+  PrintNewLine();
+  {
+    IndentScope scope2(this, "Target: {");
+    this->Visit(node->target_expr());
+  }
+  PrintIndentedNewLine("}");
+}
+
 void AstPrinter::VisitPrototype(const Prototype* node) {
   IndentScope scope(this, "Prototype:");
 

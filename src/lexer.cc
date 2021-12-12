@@ -40,7 +40,6 @@ Token::Value Lexer::NextToken() {
     curToken.value = Token::EOS;
   } else {
     curToken.value = ScanSingleOp();
-    advance();
   }
   return curToken.value;
 }
@@ -71,10 +70,14 @@ Token::Value Lexer::ScanNumber() {
 
 Token::Value Lexer::ScanSingleOp() {
   AddLiteralChar(c0_);
-  switch (c0_) {
+  char base = c0_;
+  advance();
+  switch (base) {
     case '+':
+      if (c0_ == '+') return Select(Token::INC);
       return Token::ADD;
     case '-':
+      if (c0_ == '-') return Select(Token::DEC);
       return Token::SUB;
     case '*':
       return Token::MUL;

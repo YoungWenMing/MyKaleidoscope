@@ -172,6 +172,11 @@ void Lexer::ResetDesc() {
   curToken.value = Token::UNINITIALIZED;
 }
 
+Token::Value Lexer::Select(Token::Value tok) {
+  advance();
+  return tok;
+}
+
 Token::Value Lexer::ScanIdentifierOrKeyword() {
   uint8_t flags = char_lex_flags[c0_];
   AddLiteralChar(c0_);

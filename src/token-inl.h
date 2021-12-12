@@ -17,6 +17,18 @@ constexpr bool Token::IsParamType(Token::Value val) {
 constexpr bool Token::IsType(Token::Value val) {
   return IsInRange(val, Token::INT, Token::VOID);
 }
+
+constexpr bool Token::IsProperty(Token::Value val) {
+  return IsInRange(val, Token::PERIOD, Token::LBRACK);
+}
+
+constexpr bool Token::IsPropertyOrCall(Token::Value val) {
+  return IsInRange(val, Token::PERIOD, Token::LBRACK);
+}
  
+constexpr bool Token::IsCount(Token::Value val) {
+  return IsInRange(val, Token::INC, Token::DEC);
+}
+
 } // Kaleidoscope 
 #endif // TOKEN_INL_H

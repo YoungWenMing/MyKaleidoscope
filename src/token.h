@@ -38,15 +38,19 @@ namespace Kaleidoscope {
   T(NOT,        "!",        0)
 
 #define TOKEN_LIST(T)                             \
+  T(PERIOD,     ".",        0)                    \
+  T(LBRACK,     "[",        0)                    \
   T(LPAREN,     "(",        0)                    \
   T(RPAREN,     ")",        0)                    \
+  T(RBRACK,     "]",        0)                    \
   T(LBRACE,     "{",        0)                    \
   T(RBRACE,     "}",        0)                    \
   T(COLON,      ":",        0)                    \
   T(SEMICOLON,  ";",        0)                    \
   T(COMMA,      ",",        0)                    \
-  T(PERIOD,     ".",        0)                    \
   T(ASSIGN,     "=",        1)                    \
+  T(INC,        "++",       0)                    \
+  T(DEC,        "--",       0)                    \
   T(SMI,        nullptr,    0)                    \
   T(NUMBER,     nullptr,    0)                    \
   T(IDENTIFIER, nullptr,    0)                    \
@@ -76,6 +80,9 @@ class Token {
   static inline constexpr bool IsUnaryOp(Token::Value val);
   static inline constexpr bool IsParamType(Token::Value val);
   static inline constexpr bool IsType(Token::Value val);
+  static inline constexpr bool IsProperty(Token::Value val);
+  static inline constexpr bool IsPropertyOrCall(Token::Value val);
+  static inline constexpr bool IsCount(Token::Value val);
 
  private:
   static const uint8_t precedence_[TOKEN_NUMS];

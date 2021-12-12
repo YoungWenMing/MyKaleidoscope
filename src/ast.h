@@ -47,7 +47,8 @@ using llvm::Value;
   V(Assignment)                         \
   V(CallExpression)                     \
   V(Prototype)                          \
-  V(UnaryOperation)
+  V(UnaryOperation)                     \
+  V(CountOperation)
 
 #define AST_TYPE_LIST(V)                \
   STATEMENT_NODE_LIST(V)                \
@@ -175,6 +176,24 @@ class CallExpression : public Expression {
   const std::string& callee() const { return callee_; }
   const std::vector<std::unique_ptr<Expression> >*
       args() const { return &args_; }
+};
+
+class CountOperation : public Expression {
+  Token::Value tok_;
+  bool is_postfix_;
+  std::unique_ptr<Expression> expr_;
+ public:
+  CountOperation(Token::Value tok,
+                  bool is_postfix,
+                  std::unique_ptr<Expression> expr)
+    : Expression(kCountOperation),
+      tok_(tok),
+      is_postfix_(is_postfix),
+      expr_(std::move(expr)) {}
+
+  Value* codegen(CodegenContext& ctx) override;
+  Token::Value get_operator() const { return tok_; }
+  const Expression* target_expr() const { return expr_.get(); }
 };
 
 class Prototype : public Expression {

@@ -73,6 +73,11 @@ class Parser {
 
   std::unique_ptr<Expression>             BuildUnaryExpr(
       std::unique_ptr<Expression> expr, Token::Value val);
+  std::unique_ptr<Expression>             ParsePostfixExpr();
+  std::unique_ptr<Expression>             ParseLeftHandSideExpr();
+  std::unique_ptr<Expression>             ParseMemberExpr();
+  std::unique_ptr<Expression>             ParseMemberExprContinuation(
+      std::unique_ptr<Expression> expr);
 
   std::unique_ptr<Prototype>              ParsePrototype();
 
