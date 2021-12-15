@@ -55,7 +55,7 @@ class Parser {
     preceMap[token] = prece;
   }
 
-  void recordError(const char* format, ...);
+  void RecordError(const char* format, ...);
 
   std::unique_ptr<Expression>             ParseExpression();
   std::unique_ptr<SmiLiteral>             ParseSmiLiteral();

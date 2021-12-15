@@ -370,10 +370,14 @@ Value* ForLoopStatement::codegen(CodegenContext& ctx) {
   body_->codegen(ctx);
   if (next_ != nullptr)   next_->codegen(ctx);
 
-  Value* cond_val = condition_->codegen(ctx);
-  Value* cond = builder.CreateFCmpOEQ(
-        cond_val, ConstantFP::get(Lctx, APFloat(1.0)));
-  builder.CreateCondBr(cond, loopBB, exitBB);
+  if (condition_ == nullptr) {
+    builder.CreateBr(loopBB);
+  } else {
+    Value* cond_val = condition_->codegen(ctx);
+    Value* cond = builder.CreateFCmpOEQ(
+          cond_val, ConstantFP::get(Lctx, APFloat(1.0)));
+    builder.CreateCondBr(cond, loopBB, exitBB);
+  }
 
   parenFn->getBasicBlockList().push_back(exitBB);
   builder.SetInsertPoint(exitBB);
