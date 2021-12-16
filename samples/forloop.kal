@@ -1,5 +1,8 @@
-var k = 1;
-for (var t = 10; t < 100;) {
+int k = 10;
+for (int t = 10; t < 100;) {
   t = t + 10;
 }
 k = 10 + 2;
+for (;;) {
+  k ++;
+}

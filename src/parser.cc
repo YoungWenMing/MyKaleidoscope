@@ -8,8 +8,8 @@ namespace Kaleidoscope {
 
 #define RECORD_ERR_AND_RETURN_NULL(message)         \
   { const Location loc(lexer_.current_location());  \
-    recordError(message                             \
-                ": at %d:%d\n", loc.line, loc.col);   \
+    RecordError(message                             \
+                ": at %d:%d\n", loc.line, loc.col); \
     return nullptr;                                 \
   }
 
@@ -96,8 +96,7 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
       return ParseParenExpr();
     default:
       RECORD_ERR_AND_RETURN_NULL(
-          "[Parsing Error] unknown token when parsing an expression.")
-      return nullptr;
+          "[Parsing Error] unexpected token when parsing an expression.")
   }
 }
 
@@ -187,6 +186,7 @@ std::unique_ptr<Expression> Parser::ParseLeftHandSideExpr() {
   auto expr = ParseMemberExpr();
   if (!Token::IsPropertyOrCall(curToken))  return std::move(expr);
   UNIMPLEMENTED();
+  return nullptr;
 }
 
 // Member Expression:
@@ -204,7 +204,7 @@ std::unique_ptr<Expression> Parser::ParseMemberExprContinuation(
   return nullptr;
 }
 
-void Parser::recordError(const char* format, ...) {
+void Parser::RecordError(const char* format, ...) {
   ++errNums;
   va_list args;
   va_start(args, format);
@@ -356,10 +356,13 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
     RECORD_ERR_AND_RETURN_NULL("Expecting '(' following keyword 'for' in a ForLoop statement.")
  
   auto init_stmt = ParseStatement();
-  auto cond_expr = ParseExpression();
+
+  std::unique_ptr<Expression> cond_expr = nullptr;
+  if (curToken != Token::SEMICOLON)
+    cond_expr = ParseExpression();
   if (!Check(Token::SEMICOLON))  return nullptr;
 
-  std::unique_ptr<ExpressionStatement>next_stmt = nullptr;
+  std::unique_ptr<ExpressionStatement> next_stmt = nullptr;
   if (curToken != Token::RPAREN) {
     auto next_expr = ParseExpression();
     next_stmt =
@@ -448,7 +451,6 @@ std::unique_ptr<ExpressionStatement> Parser::ParseExpressionStmt() {
 
 std::unique_ptr<EmptyStatement> Parser::ParseEmptyStatement() {
   DCHECK(curToken == Token::SEMICOLON);
-  getNextToken();
   return std::make_unique<EmptyStatement>();
 }
 
@@ -535,9 +537,10 @@ bool Parser::Check(Token::Value val) {
 
 bool Parser::Expect(Token::Value val) {
   if (curToken != val) {
-    PrintErrorF("Unexpected token: %s, while the right one is %s\n",
-                Token::TokenName(curToken), Token::TokenName(val));
-    setParserError();
+    const Location loc(lexer_.current_location());
+    RecordError("Unexpected token: %s, while the right one is %s, at %d:%d \n",
+                Token::TokenName(curToken), Token::TokenName(val),
+                loc.line, loc.col);
     return false;
   }
   return true;
