@@ -45,55 +45,66 @@ Value* BinaryExpression::codegen(CodegenContext& ctx) {
   IRBuilder<>& irbuilder = ctx.get_irbuilder();
   // support float and int
   auto rType = right->getType();
-  bool r_is_double = rType->isDoubleTy();
-  bool is_same_ty = rType == left->getType();
+  auto lType = left->getType();
 
-  if (!is_same_ty) {
+  if (rType != lType) {
     Type* doubleTy = Type::getDoubleTy(ctx.get_llvmcontext());
-    if (r_is_double) {
-      auto op = CastInst::getCastOpcode(left, true, doubleTy, true);
-      left = irbuilder.CreateCast(op, left, doubleTy, "castdb");
-    } else {
+    if (lType->isDoubleTy()) {
       auto op = CastInst::getCastOpcode(right, true, doubleTy, true);
       right = irbuilder.CreateCast(op, right, doubleTy, "castdb");
+    } else {
+      auto op = CastInst::getCastOpcode(left, true, doubleTy, true);
+      left = irbuilder.CreateCast(op, left, doubleTy, "castdb");
     }
   }
-
+  bool is_double = right->getType()->isDoubleTy();
 
   switch(op_) {
     case Token::ADD:
       // create float add
-      return r_is_double?
+      return is_double?
                 irbuilder.CreateFAdd(left, right, "addtmp") :
                 irbuilder.CreateAdd(left, right, "addtmp");
     case Token::SUB:
-      return r_is_double?
+      return is_double?
                 irbuilder.CreateFSub(left, right, "subtmp") :
                 irbuilder.CreateSub(left, right, "subtmp");
     case Token::MUL:
-      return r_is_double?
+      return is_double?
                 irbuilder.CreateFMul(left, right, "multmp") :
                 irbuilder.CreateMul(left, right, "multmp");
     case Token::DIV:
-      return r_is_double?
+      return is_double?
                 irbuilder.CreateFDiv(left, right, "divtmp"):
                 irbuilder.CreateSDiv(left, right, "divtmp");
     case Token::LT:{
-      Value *val = r_is_double?
+      Value *val = is_double?
                 irbuilder.CreateFCmpULT(left, right, "lttmp") :
                 irbuilder.CreateICmpULT(left, right, "lttmp");
       return irbuilder.CreateUIToFP(
           val, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
     }
     case Token::GT:{
-      Value *val = r_is_double?
+      Value *val = is_double?
                 irbuilder.CreateFCmpUGT(left, right, "gttmp") :
                 irbuilder.CreateICmpUGT(left, right, "gttmp");
       return irbuilder.CreateUIToFP(
           val, Type::getDoubleTy(ctx.get_llvmcontext()), "booltmp");
     }
+    case Token::LTE: {
+      Value *val = is_double?
+                irbuilder.CreateFCmpULE(left, right, "letmp") :
+                irbuilder.CreateICmpULE(left, right, "letmp");
+      return val;
+    }
+    case Token::GTE: {
+       Value *val = is_double?
+                irbuilder.CreateFCmpUGE(left, right, "getmp") :
+                irbuilder.CreateICmpUGE(left, right, "getmp");
+      return val;
+    }
     default:
-      break;
+      UNREACHABLE();
   }
   // consider user-defined operators
   std::string opFnName("binary");
@@ -302,8 +313,13 @@ Value* IfStatement::codegen(CodegenContext& ctx) {
 
   IRBuilder<>& builder = ctx.get_irbuilder();
 
-  cond = builder.CreateFCmpONE(
-      cond, ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), "ifcond");
+  if (cond->getType()->isDoubleTy()) {
+    cond = builder.CreateFCmpONE(
+        cond, ConstantFP::get(ctx.get_llvmcontext(), APFloat(0.0)), "ifcond");
+  } else {
+    cond = builder.CreateICmpNE(
+        cond, ConstantInt::get(ctx.get_llvmcontext(), APInt(1, 0)), "ifcond");
+  }
 
   Function* parenFn = builder.GetInsertBlock()->getParent();
 
@@ -322,7 +338,6 @@ Value* IfStatement::codegen(CodegenContext& ctx) {
 
   // TODO: figure out that why the llvm context and builder
   // do not need to be reset to clear the BBs
-  if (!thenV) return nullptr;
 
   // every basic block must be terminated with a control flow instruction such as ret or branch
   builder.CreateBr(mergeBB);
@@ -331,9 +346,10 @@ Value* IfStatement::codegen(CodegenContext& ctx) {
   // Note that elseBB is not added to parenFn during creation
   parenFn->getBasicBlockList().push_back(elseBB);
   builder.SetInsertPoint(elseBB);
-  Value* elseV = elseB_->codegen(ctx);
+  // Value* elseV = elseB_->codegen(ctx);
+  if (elseB_)
+    elseB_->codegen(ctx);
 
-  if (!elseV) return nullptr;
   builder.CreateBr(mergeBB);
   elseBB = builder.GetInsertBlock();
 

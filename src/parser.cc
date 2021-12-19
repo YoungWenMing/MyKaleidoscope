@@ -351,7 +351,7 @@ std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
   if (!then_stmt) return nullptr;
 
   std::unique_ptr<Statement> else_stmt = nullptr;
-  if (Check(Token::ELSE))
+  if (curToken == Token::ELSE)
     else_stmt = ParseStatement();
 
   return std::make_unique<IfStatement>(std::move(cond),
