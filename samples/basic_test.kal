@@ -18,6 +18,14 @@ for (;;) {
   k ++;
   ++k;
 }
+if (k >= 10) {
+  k ++;
+}
+if (x <= 1.8) {
+  --x;
+}
+if (x > 10) x++;
+if (x > 10);
 
 double ti = 1.5;
 double m = ti--;
