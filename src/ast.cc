@@ -430,4 +430,8 @@ Value* Block::codegen(CodegenContext& ctx) {
   return last;
 }
 
+
+#undef RECORD_ERR_AND_RETURN
+#undef RETURN_NULL_FOR_ERR
+
 } // Kaleidoscope 
