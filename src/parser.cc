@@ -96,7 +96,7 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
       return ParseParenExpr();
     default:
       RECORD_ERR_AND_RETURN_NULL(
-          "[Parsing Error] unexpected token when parsing an expression.")
+          "[Parsing Error] unexpected token when parsing an expression ")
   }
 }
 
@@ -351,8 +351,10 @@ std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
   if (!then_stmt) return nullptr;
 
   std::unique_ptr<Statement> else_stmt = nullptr;
-  if (curToken == Token::ELSE)
+  if (curToken == Token::ELSE) {
+    getNextToken();
     else_stmt = ParseStatement();
+  }
 
   return std::make_unique<IfStatement>(std::move(cond),
             std::move(then_stmt), std::move(else_stmt));
