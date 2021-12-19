@@ -24,22 +24,28 @@ namespace Kaleidoscope {
   T(BINARY,     "binary",   0)                    \
   T(RETURN,     "return",   0)
 
-#define BINARY_OP_LIST(T)                         \
-  T(MUL,        "*",        7)                    \
-  T(DIV,        "/",        7)                    \
-  T(LT,         "<",        3)                    \
-  T(GT,         ">",        3)                    \
-  T(OR,         "|",        2)                    \
-  T(AND,        "&",        2)                    \
-  T(ADD,        "+",        5)                    \
-  T(SUB,        "-",        5)
+#define BINARY_OP_LIST(T, E)                      \
+  T(E,   MUL,   "*",        7)                    \
+  T(E,   DIV,   "/",        7)                    \
+  T(E,   OR,    "|",        2)                    \
+  T(E,   AND,   "&",        2)                    \
+  T(E,   ADD,   "+",        5)                    \
+  T(E,   SUB,   "-",        5)
+
+#define EXPAND_BINOP_ASSIGN_TOKEN(T, name, str, precedence)\
+  T(ASSIGN_##name, str"=", 2)
+
+#define EXPAND_BINOP_TOKEN(T, name, str, precedence)\
+  T(name, str, precedence)
  
 #define UNARY_OP_LIST(T)                          \
   T(NOT,        "!",        0)
 
 #define TOKEN_LIST(T)                             \
+  /* BEGIN PropertyOp */                          \
   T(PERIOD,     ".",        0)                    \
   T(LBRACK,     "[",        0)                    \
+  /* END PropertyOp */                            \
   T(LPAREN,     "(",        0)                    \
   T(RPAREN,     ")",        0)                    \
   T(RBRACK,     "]",        0)                    \
@@ -48,14 +54,25 @@ namespace Kaleidoscope {
   T(COLON,      ":",        0)                    \
   T(SEMICOLON,  ";",        0)                    \
   T(COMMA,      ",",        0)                    \
+  /* BEGIN AssignmentOp */                        \
   T(ASSIGN,     "=",        1)                    \
+  BINARY_OP_LIST(EXPAND_BINOP_ASSIGN_TOKEN, T)    \
+  /* END AssignmentOp */                          \
+  /* BEGIN CountOp*/                              \
   T(INC,        "++",       0)                    \
   T(DEC,        "--",       0)                    \
+  /* END CountOp*/                                \
+  T(EQ,         "=",        3)                    \
+  T(NE,         "!=",       3)                    \
+  T(LT,         "<",        3)                    \
+  T(GT,         ">",        3)                    \
+  T(LTE,        "<=",       3)                    \
+  T(GTE,        ">=",       3)                    \
   T(SMI,        nullptr,    0)                    \
   T(NUMBER,     nullptr,    0)                    \
   T(IDENTIFIER, nullptr,    0)                    \
   KEYWORD_LIST(T)                                 \
-  BINARY_OP_LIST(T)                               \
+  BINARY_OP_LIST(EXPAND_BINOP_TOKEN, T)           \
   UNARY_OP_LIST(T)                                \
   T(UNINITIALIZED, nullptr, 0)                    \
   T(ILLEGAL,    "ILLEGAL",  0)                    \
@@ -84,6 +101,7 @@ class Token {
   static inline constexpr bool IsPropertyOrCall(Token::Value val);
   static inline constexpr bool IsCount(Token::Value val);
   static inline constexpr bool IsUnaryOrCountOp(Token::Value val);
+  static inline constexpr bool IsAssignmentOp(Token::Value val);
 
  private:
   static const uint8_t precedence_[TOKEN_NUMS];

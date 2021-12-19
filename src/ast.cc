@@ -395,16 +395,62 @@ Value* Assignment::codegen(CodegenContext& ctx) {
     return nullptr;
   }
 
-  const std::string& var_name = static_cast<Identifier*>(target_.get())->var_name();
-  AllocaInst* allo =
-      ctx.find_val(var_name);
+  IRBuilder<>& irbuilder = ctx.get_irbuilder();
+  const std::string& var_name =
+      static_cast<Identifier*>(target_.get())->var_name();
+  AllocaInst* allo = ctx.find_val(var_name);
   if (allo == nullptr)
     RECORD_ERR_AND_RETURN(ctx,
         "Assignment before an identifier was declared.");
   Value* val = value_->codegen(ctx);
   if (val == nullptr) {
-    ctx.LogError("Invalid value in assignment for variable %s.", var_name.c_str());
-    return nullptr;
+    RECORD_ERR_AND_RETURN(ctx,
+        "Invalid value in assignment for variable %s.", var_name.c_str());
+  }
+  Type *value_ty = val->getType(),
+       *target_ty = allo->getAllocatedType();
+  bool is_double = target_ty->isDoubleTy();
+  bool same_type = value_ty == target_ty;
+  if (value_ty->isDoubleTy() && !same_type) {
+    // double -> int, log error
+    RECORD_ERR_AND_RETURN(ctx,
+        "Assignment of incompatible types: assigning"
+        " a double to a variable of int.");
+  } else if (is_double && !same_type){
+    // need casting
+    auto cast_op = CastInst::getCastOpcode(val, true, target_ty, true);
+    val = irbuilder.CreateCast(cast_op, val, target_ty, "castdb");
+  }
+  if (op_ != Token::ASSIGN) {
+    Value* old_val = ctx.get_irbuilder().CreateLoad(
+        allo->getAllocatedType(), allo, var_name.c_str());
+    switch (op_) {
+      case Token::ASSIGN_MUL:
+        val = is_double ?
+                  irbuilder.CreateFMul(old_val, val, "mul") :
+                  irbuilder.CreateMul(old_val, val, "mul");
+        break;
+      case Token::ASSIGN_DIV:
+        val = is_double ?
+                  irbuilder.CreateFDiv(old_val, val, "divtmp") :
+                  irbuilder.CreateSDiv(old_val, val, "divtmp");
+        break;
+      case Token::ASSIGN_ADD:
+        val = is_double ?
+                  irbuilder.CreateFAdd(old_val, val, "addtmp") :
+                  irbuilder.CreateAdd(old_val, val, "addtmp");
+        break;
+      case Token::ASSIGN_SUB:
+        val = is_double ?
+                  irbuilder.CreateFSub(old_val, val, "subtmp") :
+                  irbuilder.CreateSub(old_val, val, "subtmp");
+        break;
+      case Token::ASSIGN_OR:
+      case Token::ASSIGN_AND:
+        UNIMPLEMENTED();
+      default:
+        UNREACHABLE();
+    }
   }
 
   return ctx.get_irbuilder().CreateStore(val, allo);
