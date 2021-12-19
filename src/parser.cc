@@ -150,34 +150,46 @@ std::unique_ptr<Expression> Parser::ParseBinopRhs(
 /// unary
 ///   ::= primary
 ///   ::= '!' unary
+///   ::= '--' unary
+///   ::= '++' unary
 std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
   // TODO(yang): both unary op and count op must be considered
-  if (!Token::IsUnaryOp(curToken))  return ParsePostfixExpr();
+  if (!Token::IsUnaryOrCountOp(curToken))  return ParsePostfixExpr();
 
   Token::Value op = curToken;
   getNextToken();
+  // Left-recursion is avoided by eating next token.
   if (auto val = ParseUnaryExpr()) {
-    auto entry = unarySet.find(op);
-    if (entry != unarySet.end())
-      return std::make_unique<UnaryExpression>(op, std::move(val));
-    else
-      // only handle intrinsic unary operators
+    if (Token::IsCount(op)) {
+      if (!IsValidReference(val.get()))
+        RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a"
+            " valid reference for count operation ");
+      return BuildCountExpr(std::move(val), op, false);
+    } else {
       return BuildUnaryExpr(std::move(val), op);
+    }
   }
   return nullptr;
 }
 
-std::unique_ptr<Expression> Parser::BuildUnaryExpr(
+std::unique_ptr<UnaryOperation> Parser::BuildUnaryExpr(
     std::unique_ptr<Expression> expr, Token::Value val) {
   return std::make_unique<UnaryOperation>(val, std::move(expr));
+}
+
+std::unique_ptr<CountOperation> Parser::BuildCountExpr(
+    std::unique_ptr<Expression> expr, Token::Value val, bool is_postfix) {
+  return std::make_unique<CountOperation>(val, is_postfix, std::move(expr));
 }
 
 std::unique_ptr<Expression> Parser::ParsePostfixExpr() {
   auto expr = ParseLeftHandSideExpr();
   if (!Token::IsCount(curToken)) return std::move(expr);
   // build operation for INC and DEC
-  auto result = std::make_unique<CountOperation>(
-                    curToken, true, std::move(expr));
+  if (!IsValidReference(expr.get()))
+    RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a"
+        " valid reference for count operation ");
+  auto result = BuildCountExpr(std::move(expr), curToken, true);
   getNextToken();   // consume '++' or '--'
   return std::move(result);
 }
@@ -544,6 +556,11 @@ bool Parser::Expect(Token::Value val) {
     return false;
   }
   return true;
+}
+
+bool Parser::IsValidReference(Expression* expr) {
+  // TODO(yang): support property expressions.
+  return expr->IsIdentifier();
 }
 
 std::unique_ptr<AstNode> LogError(const char* info) {

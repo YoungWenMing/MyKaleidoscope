@@ -83,6 +83,7 @@ class Token {
   static inline constexpr bool IsProperty(Token::Value val);
   static inline constexpr bool IsPropertyOrCall(Token::Value val);
   static inline constexpr bool IsCount(Token::Value val);
+  static inline constexpr bool IsUnaryOrCountOp(Token::Value val);
 
  private:
   static const uint8_t precedence_[TOKEN_NUMS];

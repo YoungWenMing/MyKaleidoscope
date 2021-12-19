@@ -5,4 +5,12 @@ for (int t = 10; t < 100;) {
 k = 10 + 2;
 for (;;) {
   k ++;
+  ++k;
+}
+
+double ti = 1.5;
+double m = ti--;
+m = --ti;
+for (;ti < 10.0;) {
+  ti = ti + 2.0;
 }
