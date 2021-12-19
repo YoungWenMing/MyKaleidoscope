@@ -310,17 +310,21 @@ class UnaryOperation : public Expression {
 };
 
 class Assignment : public Expression {
+  Token::Value op_;
   std::unique_ptr<Expression> target_;
   std::unique_ptr<Expression> value_;
  public:
-  Assignment(std::unique_ptr<Expression> target,
+  Assignment(Token::Value op,
+      std::unique_ptr<Expression> target,
       std::unique_ptr<Expression> value)
     : Expression(kAssignment),
+      op_(op),
       target_(std::move(target)),
       value_(std::move(value)) {}
   Value* codegen(CodegenContext& ctx) override;
   const Expression* target() const { return target_.get(); }
   const Expression* value() const { return value_.get(); }
+  const Token::Value op_type() const { return op_; }
   ASTType valueType() const { return value_->getType();}
 };
 

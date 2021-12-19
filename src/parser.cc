@@ -103,12 +103,13 @@ std::unique_ptr<Expression> Parser::ParsePrimary() {
 std::unique_ptr<Assignment>
     Parser::ParseAssignment(std::unique_ptr<Expression> lhs) {
   // eat assign operator
-  if (lhs->getType() != AstNode::kIdentifier)
-    RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting an identifer")
+  if (!IsValidReference(lhs.get()))
+    RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a valid reference.")
 
+  Token::Value op = curToken;
   getNextToken();
   auto value = ParseExpression();
-  return std::make_unique<Assignment>(std::move(lhs), std::move(value));
+  return std::make_unique<Assignment>(op, std::move(lhs), std::move(value));
 }
 
 std::unique_ptr<Expression> Parser::ParseBinopRhs(
@@ -228,9 +229,8 @@ std::unique_ptr<Expression> Parser::ParseExpression() {
   std::unique_ptr<Expression> lhs = ParseUnaryExpr();
   if (!lhs)   return lhs;
 
-  if (curToken == Token::ASSIGN)
+  if (Token::IsAssignmentOp(curToken))
     return ParseAssignment(std::move(lhs));
-  // TODO(yang): consider post-increment-symbol
   return ParseBinopRhs(0, std::move(lhs));
 }
 

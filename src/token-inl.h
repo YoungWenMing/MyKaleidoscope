@@ -34,5 +34,9 @@ constexpr bool Token::IsUnaryOrCountOp(Token::Value val) {
   return IsUnaryOp(val) || IsCount(val);
 }
 
+constexpr bool Token::IsAssignmentOp(Token::Value val) {
+  return IsInRange(val, Token::ASSIGN, Token::ASSIGN_SUB);
+}
+
 } // Kaleidoscope 
 #endif // TOKEN_INL_H

@@ -75,17 +75,23 @@ Token::Value Lexer::ScanSingleOp() {
   switch (base) {
     case '+':
       if (c0_ == '+') return Select(Token::INC);
+      if (c0_ == '=') return Select(Token::ASSIGN_ADD);
       return Token::ADD;
     case '-':
       if (c0_ == '-') return Select(Token::DEC);
+      if (c0_ == '=') return Select(Token::ASSIGN_SUB);
       return Token::SUB;
     case '*':
+      if (c0_ == '=') return Select(Token::ASSIGN_MUL);
       return Token::MUL;
     case '/':
+      if (c0_ == '=') return Select(Token::ASSIGN_DIV);
       return Token::DIV;
     case '<':
+      if (c0_ == '=') return Select(Token::LTE);
       return Token::LT;
     case '>':
+      if (c0_ == '=') return Select(Token::GTE);
       return Token::GT;
     case '(':
       return Token::LPAREN;
@@ -104,12 +110,16 @@ Token::Value Lexer::ScanSingleOp() {
     case '.':
       return Token::PERIOD;
     case '=':
+      if (c0_ == '=') return Select(Token::EQ);
       return Token::ASSIGN;
     case '|':
+      if (c0_ == '=') return Select(Token::ASSIGN_OR);
       return Token::OR;
     case '&':
+      if (c0_ == '=') return Select(Token::ASSIGN_AND);
       return Token::AND;
     case '!':
+      if (c0_ == '=') return Select(Token::NE);
       return Token::NOT;
     default:
       return Token::ILLEGAL;
