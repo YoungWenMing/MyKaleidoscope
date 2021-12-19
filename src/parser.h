@@ -71,8 +71,10 @@ class Parser {
       int last_prec, std::unique_ptr<Expression> lhs);
   std::unique_ptr<Expression>             ParseUnaryExpr();
 
-  std::unique_ptr<Expression>             BuildUnaryExpr(
+  std::unique_ptr<UnaryOperation>             BuildUnaryExpr(
       std::unique_ptr<Expression> expr, Token::Value val);
+  std::unique_ptr<CountOperation>             BuildCountExpr(
+      std::unique_ptr<Expression> expr, Token::Value val, bool is_postfix);
   std::unique_ptr<Expression>             ParsePostfixExpr();
   std::unique_ptr<Expression>             ParseLeftHandSideExpr();
   std::unique_ptr<Expression>             ParseMemberExpr();
@@ -102,6 +104,8 @@ class Parser {
 #if DEBUG
   void LogInfo(const char* info);
 #endif
+
+  bool IsValidReference(Expression* expr);
 
  public:
   Parser(const Script& script);

@@ -67,6 +67,12 @@ class AstNode {
 
   virtual Value* codegen(CodegenContext& ctx) = 0;
   ASTType getType() const { return type_; }
+
+#define CHECK_AST_TYPES(type)           \
+  bool Is##type() const                 \
+  {  return getType() == k##type; }
+  AST_TYPE_LIST(CHECK_AST_TYPES)
+#undef CHECK_AST_TYPES
  protected:
   ASTType type_;
 };

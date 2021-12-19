@@ -6,6 +6,12 @@
 namespace Kaleidoscope {
 
 using llvm::getLoadStorePointerOperand;
+#define RETURN_NULL_FOR_ERR(ctx)          \
+  if (ctx.HasError())  return nullptr;
+
+#define RECORD_ERR_AND_RETURN(ctx, ...)   \
+  { ctx.LogError(__VA_ARGS__);            \
+    return nullptr; }
 
 Value* SmiLiteral::codegen(CodegenContext& ctx) {
   return ConstantInt::get(ctx.get_llvmcontext(), APInt(32, val_));
@@ -21,10 +27,9 @@ Value* ExpressionStatement::codegen(CodegenContext& ctx) {
 
 Value* Identifier::codegen(CodegenContext& ctx) {
   AllocaInst* allo = ctx.find_val(name_);
-  if (allo == nullptr) {
-    PrintErrorF("Use identifier %s before declaration.\n", name_.c_str());
-    return nullptr;
-  }
+  if (allo == nullptr)
+    RECORD_ERR_AND_RETURN(ctx,
+        "Use identifier %s before declaration.\n", name_.c_str());
   return ctx.get_irbuilder().CreateLoad(
       allo->getAllocatedType(), allo, name_.c_str());
 }
@@ -142,18 +147,17 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
   // build store instruction.
   if (init_val_ != nullptr) {
     init_val = init_val_->codegen(ctx);
-    if (init_val != nullptr && init_val->getType() != declTy) {
-      if (decl_type_ == Token::DOUBLE) {
+    RETURN_NULL_FOR_ERR(ctx);
+    if (init_val->getType() != declTy) {
+      if (decl_type_ != Token::DOUBLE) {
+        RECORD_ERR_AND_RETURN(ctx,
+            "Incompatible type of variable %s.", name_.c_str());
+      } else {
         // need casting from int to double
         Type* doubleTy = Type::getDoubleTy(ctx.get_llvmcontext());
         auto op = CastInst::getCastOpcode(init_val, true, doubleTy, true);
         init_val = builder.CreateCast(op, init_val, doubleTy, "castdb");
-      } else {
-        ctx.LogError("Incompatible type of variable %s.", name_.c_str());
-        return nullptr;
       }
-    } else {
-      return nullptr;
     }
   } else {
     init_val = ctx.get_default_value(decl_type_);
@@ -195,6 +199,7 @@ Value* CountOperation::codegen(CodegenContext& ctx) {
   BasicBlock *curBB = builder.GetInsertBlock();
 
   Value* right_val = expr_->codegen(ctx);
+  RETURN_NULL_FOR_ERR(ctx)
   Value* left_val = getLoadStorePointerOperand(right_val);
   if (left_val == nullptr) {
     ctx.LogError("Illegal target of Count Operation -- it must be a left value.");
@@ -393,10 +398,9 @@ Value* Assignment::codegen(CodegenContext& ctx) {
   const std::string& var_name = static_cast<Identifier*>(target_.get())->var_name();
   AllocaInst* allo =
       ctx.find_val(var_name);
-  if (allo == nullptr) {
-    ctx.LogError("Assignment before an identifier was declared.");
-    return nullptr;
-  }
+  if (allo == nullptr)
+    RECORD_ERR_AND_RETURN(ctx,
+        "Assignment before an identifier was declared.");
   Value* val = value_->codegen(ctx);
   if (val == nullptr) {
     ctx.LogError("Invalid value in assignment for variable %s.", var_name.c_str());
