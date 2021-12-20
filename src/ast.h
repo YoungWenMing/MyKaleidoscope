@@ -62,7 +62,8 @@ class AstNode {
 #undef DECLARE_AST_TYPES
   };
 
-  AstNode(ASTType type) : type_(type) {}
+  AstNode(int pos, ASTType type)
+      : pos_(pos), type_(type) {}
   virtual ~AstNode() = default;
 
   virtual Value* codegen(CodegenContext& ctx) = 0;
@@ -73,19 +74,24 @@ class AstNode {
   {  return getType() == k##type; }
   AST_TYPE_LIST(CHECK_AST_TYPES)
 #undef CHECK_AST_TYPES
+  int pos() const { return pos_; }
+ private:
+  int pos_;
  protected:
   ASTType type_;
 };
 
 class Statement : public AstNode {
  public:
-  Statement(ASTType type) : AstNode(type) {}
+  Statement(int pos, ASTType type)
+      : AstNode(pos, type) {}
   virtual ~Statement() = default;
 };
 
 class Expression : public AstNode {
  public:
-  Expression(ASTType type) : AstNode(type) {}
+  Expression(int pos, ASTType type)
+      : AstNode(pos, type) {}
   virtual ~Expression() = default;
 #define IS_SOME_EXPR_FUNC(type)             \
   bool Is##type() const {                   \
@@ -103,7 +109,7 @@ class ExpressionStatement : public Statement {
   std::unique_ptr<Expression> expr_;
  public:
   ExpressionStatement(std::unique_ptr<Expression> expr)
-      : Statement(kExpressionStatement),
+      : Statement(expr->pos(), kExpressionStatement),
         expr_(std::move(expr)) {}
   Value* codegen(CodegenContext& ctx) override;
   const Expression* expresssion() const {
@@ -114,8 +120,8 @@ class ExpressionStatement : public Statement {
 class Identifier : public Expression {
   std::string name_;
  public:
-  Identifier(std::string& name) :
-    Expression(kIdentifier),
+  Identifier(int pos, std::string& name) :
+    Expression(pos, kIdentifier),
     name_(name) {}
   Value* codegen(CodegenContext& ctx) override;
   const std::string& var_name() const { return name_; }
@@ -123,8 +129,9 @@ class Identifier : public Expression {
 
 class SmiLiteral : public Expression {
  public:
-  SmiLiteral(uint32_t val) :
-    Expression(kSmiLiteral), val_(val) {}
+  SmiLiteral(int pos, uint32_t val)
+      : Expression(pos, kSmiLiteral),
+        val_(val) {}
 
   virtual ~SmiLiteral() = default;
   Value* codegen(CodegenContext& ctx) override;
@@ -137,8 +144,8 @@ class SmiLiteral : public Expression {
 class NumberLiteral : public Expression {
   double val_;
  public:
-  NumberLiteral(double val) :
-    Expression(kNumberLiteral),
+  NumberLiteral(int pos, double val) :
+    Expression(pos, kNumberLiteral),
     val_(val) {}
   Value* codegen(CodegenContext& ctx) override;
   double value() const { return val_; }
@@ -150,7 +157,7 @@ class BinaryExpression : public Expression {
  public:
   BinaryExpression(Token::Value op, std::unique_ptr<Expression> lhs,
                 std::unique_ptr<Expression> rhs) :
-      Expression(kBinaryExpression),
+      Expression(lhs->pos(), kBinaryExpression),
       op_(op), lhs_(std::move(lhs)), rhs_(std::move(rhs)) {}
   Value* codegen(CodegenContext& ctx) override;
   const Expression* left_expr() const { return lhs_.get(); }
@@ -163,7 +170,7 @@ class UnaryExpression : public Expression {
   std::unique_ptr<Expression> val_;
  public:
   UnaryExpression(Token::Value op, std::unique_ptr<Expression> val) :
-    Expression(kUnaryExpression),
+    Expression(val->pos(), kUnaryExpression),
     op_(op), val_(std::move(val)) {}
   Value* codegen(CodegenContext& ctx) override;
   Token::Value operator_token() const { return op_; }
@@ -174,9 +181,9 @@ class CallExpression : public Expression {
   std::string callee_;
   std::vector<std::unique_ptr<Expression> > args_;
  public:
-  CallExpression(const std::string& callee,
+  CallExpression(int pos, const std::string& callee,
               std::vector<std::unique_ptr<Expression>> args) :
-      Expression(kCallExpression),
+      Expression(pos, kCallExpression),
       callee_(callee), args_(std::move(args)) {}
   Value* codegen(CodegenContext& ctx) override;
   const std::string& callee() const { return callee_; }
@@ -189,10 +196,11 @@ class CountOperation : public Expression {
   bool is_postfix_;
   std::unique_ptr<Expression> expr_;
  public:
-  CountOperation(Token::Value tok,
-                  bool is_postfix,
-                  std::unique_ptr<Expression> expr)
-    : Expression(kCountOperation),
+  CountOperation(int pos,
+                 Token::Value tok,
+                 bool is_postfix,
+                 std::unique_ptr<Expression> expr)
+    : Expression(pos, kCountOperation),
       tok_(tok),
       is_postfix_(is_postfix),
       expr_(std::move(expr)) {}
@@ -215,11 +223,12 @@ class Prototype : public Expression {
   static constexpr int kTokenValueOffset = 16;
 
  public:
-  Prototype(const std::string& name,
+  Prototype(int pos,
+            const std::string& name,
             std::vector<std::string> args,
             std::vector<Token::Value> arg_types,
             Token::Value retTy = Token::VOID) :
-      Expression(kPrototype),
+      Expression(pos, kPrototype),
       name_(name),
       args_(std::move(args)),
       arg_types_(std::move(arg_types)),
@@ -248,7 +257,7 @@ class FunctionDeclaration : public Statement {
  public:
   FunctionDeclaration (std::unique_ptr<Prototype> proto,
               std::unique_ptr<Block> body)
-      : Statement(kFunctionDeclaration),
+      : Statement(proto->pos(), kFunctionDeclaration),
         proto_(std::move(proto)),
         body_(std::move(body)) {}
   Function* codegen(CodegenContext& ctx) override;
@@ -262,10 +271,11 @@ class IfStatement : public Statement {
   std::unique_ptr<Statement> thenB_;
   std::unique_ptr<Statement> elseB_;
  public:
-  IfStatement(std::unique_ptr<Expression> condition,
-            std::unique_ptr<Statement> thenB,
-            std::unique_ptr<Statement> elseB)
-      : Statement(kIfStatement),
+  IfStatement(int pos,
+              std::unique_ptr<Expression> condition,
+              std::unique_ptr<Statement> thenB,
+              std::unique_ptr<Statement> elseB)
+      : Statement(pos, kIfStatement),
         condition_(std::move(condition)),
         thenB_(std::move(thenB)),
         elseB_(std::move(elseB)) {}
@@ -279,12 +289,12 @@ class ForLoopStatement : public Statement {
   std::unique_ptr<Expression> condition_;
   std::unique_ptr<Statement> init_, next_, body_;
  public:
-    ForLoopStatement (
-             std::unique_ptr<Statement> init,
-             std::unique_ptr<Expression> condition,
-             std::unique_ptr<Statement> next,
-             std::unique_ptr<Statement> body)
-      : Statement(kForLoopStatement),
+    ForLoopStatement (int pos,
+        std::unique_ptr<Statement> init,
+        std::unique_ptr<Expression> condition,
+        std::unique_ptr<Statement> next,
+        std::unique_ptr<Statement> body)
+      : Statement(pos, kForLoopStatement),
         init_(std::move(init)),
         condition_(std::move(condition)),
         next_(std::move(next)),
@@ -301,9 +311,10 @@ class UnaryOperation : public Expression {
   Token::Value op_;
   std::unique_ptr<Expression> operand_;
  public:
-  UnaryOperation(Token::Value op, std::unique_ptr<Expression> operand)
-    : Expression(kUnaryOperation),
-      op_(op), operand_(std::move(operand)) {}
+  UnaryOperation(int pos, Token::Value op,
+      std::unique_ptr<Expression> operand)
+      : Expression(pos, kUnaryOperation),
+        op_(op), operand_(std::move(operand)) {}
   Value* codegen(CodegenContext& ctx) override;
   Token::Value operator_token() const { return op_; }
   const Expression* operand() const { return operand_.get(); }
@@ -314,10 +325,10 @@ class Assignment : public Expression {
   std::unique_ptr<Expression> target_;
   std::unique_ptr<Expression> value_;
  public:
-  Assignment(Token::Value op,
+  Assignment(int pos, Token::Value op,
       std::unique_ptr<Expression> target,
       std::unique_ptr<Expression> value)
-    : Expression(kAssignment),
+    : Expression(pos, kAssignment),
       op_(op),
       target_(std::move(target)),
       value_(std::move(value)) {}
@@ -334,10 +345,9 @@ class VariableDeclaration : public Statement {
   std::unique_ptr<Expression> init_val_;
   std::unique_ptr<VariableDeclaration> next_ = nullptr;
  public:
-  VariableDeclaration(std::string& var_name,
-      Token::Value decl_type,
-      std::unique_ptr<Expression> init_val)
-      : Statement(kVariableDeclaration),
+  VariableDeclaration(int pos, std::string& var_name,
+      Token::Value decl_type, std::unique_ptr<Expression> init_val)
+      : Statement(pos, kVariableDeclaration),
         name_(var_name),
         decl_type_(decl_type),
         init_val_(std::move(init_val)) {}
@@ -360,8 +370,8 @@ class VariableDeclaration : public Statement {
 class Block : public Statement {
   StmtsList* statements_;
  public:
-  Block(StmtsList* statements)
-      : Statement(kBlock),
+  Block(int pos, StmtsList* statements)
+      : Statement(pos, kBlock),
         statements_(std::move(statements)) {}
   Value* codegen(CodegenContext& ctx) override;
   const StmtsList* statements() const {
@@ -371,15 +381,15 @@ class Block : public Statement {
 
 class EmptyStatement : public Statement {
  public:
-  EmptyStatement() : Statement(kEmptyStatement) {}
+  EmptyStatement(int pos) : Statement(pos, kEmptyStatement) {}
   Value* codegen(CodegenContext& ctx);
 };
 
 class ReturnStatement : public Statement {
   std::unique_ptr<Expression> expression_;
  public:
-  ReturnStatement(std::unique_ptr<Expression> expr)
-      : Statement(kReturnStatement),
+  ReturnStatement(int pos, std::unique_ptr<Expression> expr)
+      : Statement(pos, kReturnStatement),
         expression_(std::move(expr)) {}
   Value* codegen(CodegenContext& ctx) override;
   const Expression* expression() const {

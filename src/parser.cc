@@ -26,15 +26,16 @@ int Parser::getOpsPrecedence(Token::Value token) {
 }
 
 std::unique_ptr<SmiLiteral> Parser::ParseSmiLiteral() {
-  std::unique_ptr<SmiLiteral> result
-      = std::make_unique<SmiLiteral>(lexer_.SmiVal());
+  std::unique_ptr<SmiLiteral> result =
+      std::make_unique<SmiLiteral>(current_pos(), lexer_.SmiVal());
   getNextToken();
   return result;
 }
 
 std::unique_ptr<NumberLiteral> Parser::ParseNumberLiteral() {
   std::unique_ptr<NumberLiteral> result =
-      std::make_unique<NumberLiteral>(lexer_.NumberVal());
+      std::make_unique<NumberLiteral>(current_pos(),
+                                      lexer_.NumberVal());
   getNextToken();
   return result;
 }
@@ -43,9 +44,10 @@ std::unique_ptr<Expression> Parser::ParseIdentifierExpr() {
   // handles simple identifiers and function calls
   std::string id = lexer_.IdentifierStr();
 
+  int pos = current_pos();
   getNextToken();
   if (curToken != Token::LPAREN) {
-    return std::make_unique<Identifier>(id);
+    return std::make_unique<Identifier>(pos, id);
   }
 
   // handle the function call cases
@@ -70,7 +72,7 @@ std::unique_ptr<Expression> Parser::ParseIdentifierExpr() {
     }
   }
   getNextToken();
-  return std::make_unique<CallExpression>(id, std::move(args));
+  return std::make_unique<CallExpression>(pos, id, std::move(args));
 }
 
 std::unique_ptr<Expression> Parser::ParseParenExpr() {
@@ -107,9 +109,11 @@ std::unique_ptr<Assignment>
     RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a valid reference.")
 
   Token::Value op = curToken;
+  int pos = current_pos();
   getNextToken();
   auto value = ParseExpression();
-  return std::make_unique<Assignment>(op, std::move(lhs), std::move(value));
+  return std::make_unique<Assignment>(
+            pos, op, std::move(lhs), std::move(value));
 }
 
 std::unique_ptr<Expression> Parser::ParseBinopRhs(
@@ -158,6 +162,7 @@ std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
   if (!Token::IsUnaryOrCountOp(curToken))  return ParsePostfixExpr();
 
   Token::Value op = curToken;
+  int pos = current_pos();
   getNextToken();
   // Left-recursion is avoided by eating next token.
   if (auto val = ParseUnaryExpr()) {
@@ -165,22 +170,23 @@ std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
       if (!IsValidReference(val.get()))
         RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a"
             " valid reference for count operation ");
-      return BuildCountExpr(std::move(val), op, false);
+      return BuildCountExpr(std::move(val), pos, op, false);
     } else {
-      return BuildUnaryExpr(std::move(val), op);
+      return BuildUnaryExpr(std::move(val), pos, op);
     }
   }
   return nullptr;
 }
 
 std::unique_ptr<UnaryOperation> Parser::BuildUnaryExpr(
-    std::unique_ptr<Expression> expr, Token::Value val) {
-  return std::make_unique<UnaryOperation>(val, std::move(expr));
+    std::unique_ptr<Expression> expr, int pos, Token::Value val) {
+  return std::make_unique<UnaryOperation>(pos, val, std::move(expr));
 }
 
 std::unique_ptr<CountOperation> Parser::BuildCountExpr(
-    std::unique_ptr<Expression> expr, Token::Value val, bool is_postfix) {
-  return std::make_unique<CountOperation>(val, is_postfix, std::move(expr));
+    std::unique_ptr<Expression> expr, int pos,
+    Token::Value val, bool is_postfix) {
+  return std::make_unique<CountOperation>(pos, val, is_postfix, std::move(expr));
 }
 
 std::unique_ptr<Expression> Parser::ParsePostfixExpr() {
@@ -190,7 +196,7 @@ std::unique_ptr<Expression> Parser::ParsePostfixExpr() {
   if (!IsValidReference(expr.get()))
     RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a"
         " valid reference for count operation ");
-  auto result = BuildCountExpr(std::move(expr), curToken, true);
+  auto result = BuildCountExpr(std::move(expr), expr->pos(), curToken, true);
   getNextToken();   // consume '++' or '--'
   return std::move(result);
 }
@@ -247,6 +253,7 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
 
   std::string FnName(lexer_.IdentifierStr());
   int precedence = -1;
+  int pos = current_pos();
   Token::Value Op = Token::ILLEGAL;
   // eat the function name idenrifier
   getNextToken();
@@ -304,12 +311,12 @@ std::unique_ptr<Prototype> Parser::ParsePrototype() {
     getNextToken();
     if (!Token::IsType(curToken))
       RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a type specifier")
-    auto res = std::make_unique<Prototype>(FnName, args_, arg_types_, curToken);
+    auto res = std::make_unique<Prototype>(pos, FnName, args_, arg_types_, curToken);
     // eat return type specifier
     getNextToken();
     return std::move(res);
   }
-  return std::make_unique<Prototype>(FnName, args_, arg_types_);
+  return std::make_unique<Prototype>(pos, FnName, args_, arg_types_);
 }
 
 std::unique_ptr<FunctionDeclaration> Parser::ParseFunctionDecl() {
@@ -339,6 +346,7 @@ std::unique_ptr<Prototype> Parser::ParseExtern() {
 //         ('else' Statement) ?
 std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
   // eat 'if'
+  int pos = current_pos();
   getNextToken();
   if (!Check(Token::LPAREN)) return nullptr;
   std::unique_ptr<Expression> cond = ParseExpression();
@@ -356,7 +364,7 @@ std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
     else_stmt = ParseStatement();
   }
 
-  return std::make_unique<IfStatement>(std::move(cond),
+  return std::make_unique<IfStatement>(pos, std::move(cond),
             std::move(then_stmt), std::move(else_stmt));
 }
 
@@ -364,6 +372,7 @@ std::unique_ptr<IfStatement> Parser::ParseIfStatement() {
 //    := 'for' '(' statement ';' expression';' statement')' statement
 std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
   // eat 'for'
+  int pos = current_pos();
   getNextToken();
 
   if (!Check(Token::LPAREN))
@@ -387,7 +396,7 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
 
   auto body = ParseStatement();
   if (body == nullptr)  return nullptr;
-  return std::make_unique<ForLoopStatement>(std::move(init_stmt),
+  return std::make_unique<ForLoopStatement>(pos, std::move(init_stmt),
             std::move(cond_expr), std::move(next_stmt), std::move(body));
 }
 
@@ -395,8 +404,9 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
 // int a = 1, b, c;
 // double t = 10;
 std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
-  // eat keyword 'var'
+  // eat type specifier
   Token::Value decl_type = curToken;
+  int pos = current_pos();
   getNextToken();
 
   typedef std::pair<std::string, std::unique_ptr<AstNode>> SEpair;
@@ -418,7 +428,7 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
       getNextToken();
       init_val = ParseExpression();
     }
-    auto temp = std::make_unique<VariableDeclaration>(var_name,
+    auto temp = std::make_unique<VariableDeclaration>(pos, var_name,
                                                       decl_type, std::move(init_val));
     if (decl == nullptr) {
       decl = std::unique_ptr<VariableDeclaration>(temp.release());
@@ -446,12 +456,13 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
 //   := '{' statement* '}'
 std::unique_ptr<Block> Parser::ParseBlock() {
   // eat left brace
+  int pos = current_pos();
   getNextToken();
   StmtsList *slist = new StmtsList();
   ParseStatementsList(*slist);
   if (!Check(Token::RBRACE))
     RECORD_ERR_AND_RETURN_NULL("Expecting '}' at the end of a block.")
-  return std::make_unique<Block>(slist);
+  return std::make_unique<Block>(pos, slist);
 }
 
 // ExpressionStatement
@@ -465,7 +476,7 @@ std::unique_ptr<ExpressionStatement> Parser::ParseExpressionStmt() {
 
 std::unique_ptr<EmptyStatement> Parser::ParseEmptyStatement() {
   DCHECK(curToken == Token::SEMICOLON);
-  return std::make_unique<EmptyStatement>();
+  return std::make_unique<EmptyStatement>(current_pos());
 }
 
 
@@ -474,13 +485,14 @@ std::unique_ptr<EmptyStatement> Parser::ParseEmptyStatement() {
 std::unique_ptr<ReturnStatement> Parser::ParseReturnStatement() {
   DCHECK(curToken == Token::RETURN);
   // eat 'return' keyword
+  int pos = current_pos();
   getNextToken();
   auto expr = ParseExpression();
   DCHECK(curToken == Token::SEMICOLON);
   // eat ';'
   getNextToken();
   // TODO(yang): distinguish empty expression or error
-  return std::make_unique<ReturnStatement>(std::move(expr));
+  return std::make_unique<ReturnStatement>(pos, std::move(expr));
 }
 
 // Statement
@@ -538,7 +550,7 @@ std::unique_ptr<Block> Parser::ParseToplevel() {
   getNextToken();
   StmtsList *statement_list = new StmtsList();
   ParseStatementsList(*statement_list);
-  return std::make_unique<Block>(statement_list);
+  return std::make_unique<Block>(0, statement_list);
 }
 
 bool Parser::Check(Token::Value val) {
