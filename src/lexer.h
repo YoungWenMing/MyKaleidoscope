@@ -30,6 +30,9 @@ class Lexer {
   const Location current_location() const {
     return script_.get_location(current_pos());
   }
+  const Location calculate_location(int pos) const {
+    return script_.get_location(pos);
+  }
 
  private:
   void advance();

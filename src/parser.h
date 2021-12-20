@@ -46,6 +46,8 @@ class Parser {
     curToken = lexer_.NextToken();
   }
 
+  int current_pos() const { return lexer_.current_pos(); }
+
   std::string& getIdentifierStr() {
     return lexer_.IdentifierStr();
   }
@@ -72,9 +74,10 @@ class Parser {
   std::unique_ptr<Expression>             ParseUnaryExpr();
 
   std::unique_ptr<UnaryOperation>             BuildUnaryExpr(
-      std::unique_ptr<Expression> expr, Token::Value val);
+      std::unique_ptr<Expression> expr, int pos, Token::Value val);
   std::unique_ptr<CountOperation>             BuildCountExpr(
-      std::unique_ptr<Expression> expr, Token::Value val, bool is_postfix);
+      std::unique_ptr<Expression> expr, int pos,
+      Token::Value val, bool is_postfix);
   std::unique_ptr<Expression>             ParsePostfixExpr();
   std::unique_ptr<Expression>             ParseLeftHandSideExpr();
   std::unique_ptr<Expression>             ParseMemberExpr();
