@@ -82,7 +82,7 @@ void AstPrinter::VisitVariableDeclaration(const VariableDeclaration* node) {
       if (node->init_val() != nullptr) {
         PrintIndentedVisit("", node->init_val());
       }
-      Print("\n");
+      // Print("\n");
       PrintIndentedNewLine("},");
       node = node->next();
     }
@@ -98,7 +98,7 @@ void AstPrinter::VisitIdentifier(const Identifier* node) {
 }
 
 void AstPrinter::VisitSmiLiteral(const SmiLiteral* node) {
-  IndentScope scope(this, "SmiLiteral:");
+  IndentScope scope(this, "Smi:");
   PrintIndented(std::to_string(node->value()).c_str());
   PrintNewLine();
 }
@@ -205,6 +205,24 @@ void AstPrinter::VisitFunctionDeclaration(const FunctionDeclaration* node) {
   }
   PrintIndented("}\n");
 
+}
+
+void AstPrinter::VisitInitListExpr(const InitListExpr* node) {
+  {
+    IndentScope scope(this, "Initial List: {");
+    for (size_t i = 0; i < node->size(); ++i) {
+      std::string index = std::to_string(i);
+      index.append(": {");
+      if (node->get_expr(i) == nullptr) {
+        index.append(" default value },\n");
+        PrintIndented(index.c_str());
+      } else {
+        PrintIndentedVisit(index.c_str(), node->get_expr(i));
+        PrintIndented("},\n");
+      }
+    }
+  }
+  PrintIndented("}\n");
 }
 
 } // Kaleidoscope 

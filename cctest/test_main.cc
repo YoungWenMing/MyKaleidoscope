@@ -47,8 +47,13 @@ void test_ast(const char* src) {
   Script script(src, strlen(src));
   Parser parser(script);
   std::unique_ptr<AstNode> root_block = parser.ParseToplevel();
-  AstPrinter printer;
-  printer.Visit(root_block.get());
+  if (parser.HasParserError()) {
+    printf("We got %d error(s) during parsing, please check your source code.",
+           parser.GetErrorNums());
+  } else {
+    AstPrinter printer;
+    printer.Visit(root_block.get());
+  }
 }
 
 void test_codegen(const char* src_name, const char* src) {

@@ -3,7 +3,6 @@
 
 #include <vector>
 
-
 namespace Kaleidoscope {
 
 struct Location {
@@ -34,7 +33,7 @@ class Script {
     const char *cursor = src_, *end = src_ + length_;
     line_ends_.push_back(0);
     while (cursor != end) {
-      if (cursor[0] == '\n') line_ends_.push_back(cursor - src_);
+      if (cursor[0] == '\n') line_ends_.push_back(cursor - src_ + 1);
       cursor++;
     }
   }
