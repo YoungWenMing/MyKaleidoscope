@@ -48,7 +48,8 @@ using llvm::Value;
   V(CallExpression)                     \
   V(Prototype)                          \
   V(UnaryOperation)                     \
-  V(CountOperation)
+  V(CountOperation)                     \
+  V(InitListExpr)
 
 #define AST_TYPE_LIST(V)                \
   STATEMENT_NODE_LIST(V)                \
@@ -339,18 +340,36 @@ class Assignment : public Expression {
   ASTType valueType() const { return value_->getType();}
 };
 
+// Initializer List Expression
+// Example: {1,2,3}
+// Only support array currently
+class InitListExpr : public Expression {
+  typedef std::vector<std::unique_ptr<Expression>> ExprVec;
+  ExprVec init_exprs_;
+ public:
+  InitListExpr(int pos, ExprVec init_exprs)
+    : Expression(pos, kInitListExpr),
+      init_exprs_(std::move(init_exprs)) {}
+  size_t size() const { return init_exprs_.size(); }
+  Value* codegen(CodegenContext& ctx) override;
+  Expression* get_expr(size_t i) const {
+    return init_exprs_[i].get();
+  }
+};
+
 class VariableDeclaration : public Statement {
   std::string name_;
   Token::Value decl_type_;
-  std::unique_ptr<Expression> init_val_;
+  bool is_array_;
+  int array_size_ = -1;
+  std::unique_ptr<Expression> init_val_ = nullptr;
   std::unique_ptr<VariableDeclaration> next_ = nullptr;
  public:
   VariableDeclaration(int pos, std::string& var_name,
-      Token::Value decl_type, std::unique_ptr<Expression> init_val)
+      Token::Value decl_type)
       : Statement(pos, kVariableDeclaration),
         name_(var_name),
-        decl_type_(decl_type),
-        init_val_(std::move(init_val)) {}
+        decl_type_(decl_type) {}
   Value* codegen(CodegenContext& ctx) override;
 
   void set_next(std::unique_ptr<VariableDeclaration> next) {
@@ -365,6 +384,15 @@ class VariableDeclaration : public Statement {
   const Expression* init_val() const {
     return init_val_.get();
   }
+  const bool is_array() const {
+    return is_array_;
+  }
+  void set_init_val(std::unique_ptr<Expression> init_val) {
+    init_val_ = std::move(init_val);
+  }
+  void set_array_size(int size) { array_size_ = size; }
+  int array_size() const { return array_size_; }
+  void set_is_array() { is_array_ = true; }
 };
 
 class Block : public Statement {

@@ -138,6 +138,10 @@ Value* UnaryOperation::codegen(CodegenContext& ctx) {
   return target;
 }
 
+Value* InitListExpr::codegen(CodegenContext& ctx) {
+  return nullptr;
+}
+
 Value* VariableDeclaration::codegen(CodegenContext& ctx) {
   IRBuilder<>& builder = ctx.get_irbuilder();
 

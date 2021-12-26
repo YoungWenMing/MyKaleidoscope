@@ -74,15 +74,16 @@ class Parser {
   std::unique_ptr<Expression>             ParseUnaryExpr();
 
   std::unique_ptr<UnaryOperation>             BuildUnaryExpr(
-      std::unique_ptr<Expression> expr, int pos, Token::Value val);
+      int pos, Token::Value val, std::unique_ptr<Expression> expr);
   std::unique_ptr<CountOperation>             BuildCountExpr(
-      std::unique_ptr<Expression> expr, int pos,
-      Token::Value val, bool is_postfix);
+      int pos, Token::Value val, bool is_postfix,
+      std::unique_ptr<Expression> expr);
   std::unique_ptr<Expression>             ParsePostfixExpr();
   std::unique_ptr<Expression>             ParseLeftHandSideExpr();
   std::unique_ptr<Expression>             ParseMemberExpr();
   std::unique_ptr<Expression>             ParseMemberExprContinuation(
       std::unique_ptr<Expression> expr);
+  std::unique_ptr<InitListExpr>           ParseInitListExpr(int size);
 
   std::unique_ptr<Prototype>              ParsePrototype();
 
@@ -116,6 +117,7 @@ class Parser {
   std::unique_ptr<Block> ParseToplevel();
 
   bool HasParserError() const { return errNums != 0; }
+  int GetErrorNums() const { return errNums; }
 };
 
 } // Kaleidoscope

@@ -170,22 +170,22 @@ std::unique_ptr<Expression> Parser::ParseUnaryExpr() {
       if (!IsValidReference(val.get()))
         RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a"
             " valid reference for count operation ");
-      return BuildCountExpr(std::move(val), pos, op, false);
+      return BuildCountExpr(pos, op, false, std::move(val));
     } else {
-      return BuildUnaryExpr(std::move(val), pos, op);
+      return BuildUnaryExpr(pos, op, std::move(val));
     }
   }
   return nullptr;
 }
 
 std::unique_ptr<UnaryOperation> Parser::BuildUnaryExpr(
-    std::unique_ptr<Expression> expr, int pos, Token::Value val) {
+    int pos, Token::Value val, std::unique_ptr<Expression> expr) {
   return std::make_unique<UnaryOperation>(pos, val, std::move(expr));
 }
 
 std::unique_ptr<CountOperation> Parser::BuildCountExpr(
-    std::unique_ptr<Expression> expr, int pos,
-    Token::Value val, bool is_postfix) {
+    int pos, Token::Value val, bool is_postfix,
+    std::unique_ptr<Expression> expr) {
   return std::make_unique<CountOperation>(pos, val, is_postfix, std::move(expr));
 }
 
@@ -196,7 +196,7 @@ std::unique_ptr<Expression> Parser::ParsePostfixExpr() {
   if (!IsValidReference(expr.get()))
     RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Expecting a"
         " valid reference for count operation ");
-  auto result = BuildCountExpr(std::move(expr), expr->pos(), curToken, true);
+  auto result = BuildCountExpr(expr->pos(), curToken, true, std::move(expr));
   getNextToken();   // consume '++' or '--'
   return std::move(result);
 }
@@ -221,6 +221,36 @@ std::unique_ptr<Expression> Parser::ParseMemberExprContinuation(
     std::unique_ptr<Expression> expr) {
   UNIMPLEMENTED();
   return nullptr;
+}
+
+// Initializer list expression
+//    '{' {Expression,}* '}'
+std::unique_ptr<InitListExpr> Parser::ParseInitListExpr(int size) {
+  // eat '{'
+  getNextToken();
+  int pos = current_pos();
+  std::vector<std::unique_ptr<Expression>> init_vec;
+  int list_size = 0;
+  while (curToken != Token::RBRACE) {
+    if (curToken == Token::EOS)
+      RECORD_ERR_AND_RETURN_NULL("[Parsing Error]"
+          " Unexpected eof in an initializer list ");
+    if (curToken == Token::COMMA) {
+      init_vec.push_back(nullptr);
+      getNextToken();
+    } else {
+      init_vec.push_back(ParseExpression());
+      if (curToken == Token::COMMA)
+        getNextToken();
+    }
+    ++list_size;
+  }
+  // eat '}'
+  getNextToken();
+  if (list_size > size)
+    RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Too many "
+        "elements in initializer list.");
+  return std::make_unique<InitListExpr>(pos, std::move(init_vec));
 }
 
 void Parser::RecordError(const char* format, ...) {
@@ -403,6 +433,7 @@ std::unique_ptr<ForLoopStatement> Parser::ParseForloop() {
 // Variable Declaration
 // int a = 1, b, c;
 // double t = 10;
+// int a[] = {1,2,3};
 std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
   // eat type specifier
   Token::Value decl_type = curToken;
@@ -421,15 +452,31 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
     
     std::string var_name(getIdentifierStr());
     std::unique_ptr<Expression> init_val = nullptr;
+    std::unique_ptr<VariableDeclaration> temp =
+        std::make_unique<VariableDeclaration>(pos, var_name,
+                                              decl_type);
     // eat variable's id string
     getNextToken();
+    // check array case
+    if (curToken == Token::LBRACK) {
+      temp->set_is_array();
+      getNextToken();
+      if (curToken != Token::RBRACK) {
+        Expect(Token::SMI);
+        auto size_expr = ParseSmiLiteral();
+        temp->set_array_size(size_expr->value());
+      }
+      Check(Token::RBRACK);
+    }
     if (curToken == Token::ASSIGN) {
       // eat '='
       getNextToken();
-      init_val = ParseExpression();
+      if (curToken == Token::LBRACE)
+        init_val = ParseInitListExpr(temp->array_size());
+      else
+        init_val = ParseExpression();
+      temp->set_init_val(std::move(init_val));
     }
-    auto temp = std::make_unique<VariableDeclaration>(pos, var_name,
-                                                      decl_type, std::move(init_val));
     if (decl == nullptr) {
       decl = std::unique_ptr<VariableDeclaration>(temp.release());
       current = decl.get();
