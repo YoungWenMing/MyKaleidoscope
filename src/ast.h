@@ -345,12 +345,17 @@ class Assignment : public Expression {
 // Only support array currently
 class InitListExpr : public Expression {
   typedef std::vector<std::unique_ptr<Expression>> ExprVec;
+  Token::Value element_ty_;
+  int desired_size_;
   ExprVec init_exprs_;
  public:
-  InitListExpr(int pos, ExprVec init_exprs)
+  InitListExpr(int pos, Token::Value element_ty,
+               int desired_size, ExprVec init_exprs)
     : Expression(pos, kInitListExpr),
+      element_ty_(element_ty),
+      desired_size_(desired_size),
       init_exprs_(std::move(init_exprs)) {}
-  size_t size() const { return init_exprs_.size(); }
+  size_t size() const { return desired_size_; }
   Value* codegen(CodegenContext& ctx) override;
   Expression* get_expr(size_t i) const {
     return init_exprs_[i].get();
@@ -393,6 +398,7 @@ class VariableDeclaration : public Statement {
   void set_array_size(int size) { array_size_ = size; }
   int array_size() const { return array_size_; }
   void set_is_array() { is_array_ = true; }
+  Token::Value declared_type() const { return decl_type_; }
 };
 
 class Block : public Statement {

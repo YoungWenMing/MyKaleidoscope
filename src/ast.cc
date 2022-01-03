@@ -139,7 +139,47 @@ Value* UnaryOperation::codegen(CodegenContext& ctx) {
 }
 
 Value* InitListExpr::codegen(CodegenContext& ctx) {
-  return nullptr;
+  Type *elementTy = ctx.get_llvm_type(element_ty_);
+  ArrayType *arrayTy = ArrayType::get(elementTy, size());
+  IRBuilder<>& builder = ctx.get_irbuilder();
+
+  CHECK(elementTy->isDoubleTy() || elementTy->isIntegerTy());
+
+  std::vector<Constant*> cvec;
+  cvec.reserve(size());
+  Constant* default_val = llvm::cast<Constant>(ctx.get_default_value(element_ty_));
+
+  for (size_t i = 0, e = init_exprs_.size(); i != e; ++i) {
+    Expression *el = init_exprs_[i].get();
+    if (el == nullptr) {
+      cvec.push_back(default_val);
+    } else {
+      Value *el_val = el->codegen(ctx);
+      if (el_val == nullptr) {
+        cvec.push_back(default_val);
+      }
+      if (el_val->getType() != elementTy) {
+        if (elementTy->isDoubleTy()) {
+          auto op = CastInst::getCastOpcode(
+              el_val, true, elementTy, true);
+          el_val = builder.CreateCast(op, el_val, elementTy, "castdb");
+        } else {
+          RECORD_ERR_AND_RETURN(ctx,
+              "Element indexed %lu is not compatible "
+              "with this array ", i);
+        }
+      } else if (!llvm::isa<Constant>(el_val)) {
+        RECORD_ERR_AND_RETURN(ctx,
+            "Element indexed %lu is not constant value ", i);
+      }
+      cvec.push_back(llvm::cast<Constant>(el_val));
+    }
+  }
+  // fill default values
+  for (size_t i = init_exprs_.size(), e = size(); i != e; ++i)
+    cvec.push_back(default_val);
+  Value *ret_val = ConstantArray::get(arrayTy, cvec);
+  return ret_val;
 }
 
 Value* VariableDeclaration::codegen(CodegenContext& ctx) {
@@ -150,6 +190,8 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
 
   // TODO(yang): cover different types, including string\boolean
   Type* declTy = ctx.get_llvm_type(decl_type_);
+  if (is_array())
+    declTy = ArrayType::get(declTy, array_size());
   AllocaInst* allo = new AllocaInst(declTy, 0, name_.c_str(), curBB);
 
   ContextScope& cur_scope = ctx.get_current_scope();
@@ -166,7 +208,7 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
     if (init_val->getType() != declTy) {
       if (decl_type_ != Token::DOUBLE) {
         RECORD_ERR_AND_RETURN(ctx,
-            "Incompatible type of variable %s.", name_.c_str());
+            "Incompatible type of variable %s.\n", name_.c_str());
       } else {
         // need casting from int to double
         Type* doubleTy = Type::getDoubleTy(ctx.get_llvmcontext());
@@ -175,7 +217,13 @@ Value* VariableDeclaration::codegen(CodegenContext& ctx) {
       }
     }
   } else {
-    init_val = ctx.get_default_value(decl_type_);
+    if (is_array()) {
+      Value* dval = ctx.get_default_value(decl_type_);
+      std::vector<Constant*> init_vec(array_size(), cast<Constant>(dval));
+      init_val = ConstantArray::get(cast<ArrayType>(declTy), init_vec);
+    } else {
+      init_val = ctx.get_default_value(decl_type_);
+    }
   }
   builder.CreateStore(init_val, allo);
 
