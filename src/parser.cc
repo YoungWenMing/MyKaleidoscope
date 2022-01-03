@@ -225,7 +225,8 @@ std::unique_ptr<Expression> Parser::ParseMemberExprContinuation(
 
 // Initializer list expression
 //    '{' {Expression,}* '}'
-std::unique_ptr<InitListExpr> Parser::ParseInitListExpr(int size) {
+std::unique_ptr<InitListExpr>
+    Parser::ParseInitListExpr(int size, Token::Value element_ty) {
   // eat '{'
   getNextToken();
   int pos = current_pos();
@@ -250,7 +251,8 @@ std::unique_ptr<InitListExpr> Parser::ParseInitListExpr(int size) {
   if (list_size > size)
     RECORD_ERR_AND_RETURN_NULL("[Parsing Error] Too many "
         "elements in initializer list.");
-  return std::make_unique<InitListExpr>(pos, std::move(init_vec));
+  return std::make_unique<InitListExpr>(pos, element_ty,
+                                        size, std::move(init_vec));
 }
 
 void Parser::RecordError(const char* format, ...) {
@@ -471,12 +473,19 @@ std::unique_ptr<VariableDeclaration> Parser::ParseVariableDecl() {
     if (curToken == Token::ASSIGN) {
       // eat '='
       getNextToken();
-      if (curToken == Token::LBRACE)
-        init_val = ParseInitListExpr(temp->array_size());
-      else
+      if (curToken == Token::LBRACE) {
+        init_val = ParseInitListExpr(temp->array_size(), decl_type);
+        if (temp->array_size() == -1 && init_val != nullptr) {
+          temp->set_array_size(
+              static_cast<InitListExpr*>(init_val.get())->size());
+        }
+      } else
         init_val = ParseExpression();
       temp->set_init_val(std::move(init_val));
     }
+    if (temp->is_array() && temp->array_size() == -1)
+      RECORD_ERR_AND_RETURN_NULL("Definition of variable with array "
+          "type needs an explicit size or an initialize");
     if (decl == nullptr) {
       decl = std::unique_ptr<VariableDeclaration>(temp.release());
       current = decl.get();

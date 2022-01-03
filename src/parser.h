@@ -83,7 +83,8 @@ class Parser {
   std::unique_ptr<Expression>             ParseMemberExpr();
   std::unique_ptr<Expression>             ParseMemberExprContinuation(
       std::unique_ptr<Expression> expr);
-  std::unique_ptr<InitListExpr>           ParseInitListExpr(int size);
+  std::unique_ptr<InitListExpr>
+      ParseInitListExpr(int size, Token::Value element_ty);
 
   std::unique_ptr<Prototype>              ParsePrototype();
 
