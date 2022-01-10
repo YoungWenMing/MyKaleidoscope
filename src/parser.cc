@@ -219,8 +219,30 @@ std::unique_ptr<Expression> Parser::ParseMemberExpr() {
 
 std::unique_ptr<Expression> Parser::ParseMemberExprContinuation(
     std::unique_ptr<Expression> expr) {
-  UNIMPLEMENTED();
-  return nullptr;
+  do {
+    switch(curToken) {
+      case Token::LBRACK: {
+        int pos = current_pos();
+        getNextToken();
+        std::unique_ptr<Expression> key = ParseExpression();
+        if (key == nullptr)
+          RECORD_ERR_AND_RETURN_NULL("Expecting valid expression in side [].")
+        else if (!Expect(Token::RBRACK))
+          RECORD_ERR_AND_RETURN_NULL("Expecting ']' in pair of '['.")
+        else {
+          // eat ']'
+          getNextToken();
+          expr = std::make_unique<Property>(pos, Property::KEYED_PROPERTY,
+                                            std::move(key), std::move(expr));
+        }
+        break;
+      }
+      case Token::PERIOD:
+      default:
+        UNIMPLEMENTED();
+    }
+  } while (Token::IsProperty(curToken));
+  return expr;
 }
 
 // Initializer list expression

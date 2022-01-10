@@ -49,7 +49,8 @@ using llvm::Value;
   V(Prototype)                          \
   V(UnaryOperation)                     \
   V(CountOperation)                     \
-  V(InitListExpr)
+  V(InitListExpr)                       \
+  V(Property)
 
 #define AST_TYPE_LIST(V)                \
   STATEMENT_NODE_LIST(V)                \
@@ -338,6 +339,29 @@ class Assignment : public Expression {
   const Expression* value() const { return value_.get(); }
   const Token::Value op_type() const { return op_; }
   ASTType valueType() const { return value_->getType();}
+};
+
+class Property final : public Expression {
+ public:
+  enum PropertyKind {
+    KEYED_PROPERTY,
+    NAMED_PROPERTY
+  };
+ private:
+  PropertyKind kind_;
+  std::unique_ptr<Expression> key_;
+  std::unique_ptr<Expression> target_;
+ public:
+  Property(int pos, PropertyKind kind,
+           std::unique_ptr<Expression> key,
+           std::unique_ptr<Expression> target)
+    : Expression(pos, kProperty),
+      kind_(kind),
+      key_(std::move(key)),
+      target_(std::move(target)) {}
+  Value* codegen(CodegenContext& ctx) override;
+  Expression* key_expr() const { return key_.get(); }
+  Expression* target_expr() const { return target_.get(); }
 };
 
 // Initializer List Expression

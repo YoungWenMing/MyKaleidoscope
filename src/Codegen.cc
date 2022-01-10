@@ -166,7 +166,7 @@ void CodegenDriver::generate_code() {
   ctx_.EnsureMainFunctionTerminate();
 #if 1
   if (ctx_.HasError())
-    printf("Error(s) occured during code generation.\n");
+    printf("\nError(s) occured during code generation.\n");
   else
     ctx_.get_moduleptr()->dump();
 #endif // DEBUG

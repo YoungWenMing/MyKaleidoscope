@@ -138,6 +138,29 @@ Value* UnaryOperation::codegen(CodegenContext& ctx) {
   return target;
 }
 
+Value* Property::codegen(CodegenContext& ctx) {
+  Value *target = target_->codegen(ctx);
+  Value *key = key_->codegen(ctx);
+  IRBuilder<>& builder = ctx.get_irbuilder();
+
+  if (target == nullptr || key == nullptr)
+    RECORD_ERR_AND_RETURN(ctx,
+        "Invalid target or key expression in a property.");
+  if (kind_ == KEYED_PROPERTY) {
+    if (!key->getType()->isIntegerTy())
+      RECORD_ERR_AND_RETURN(ctx, "Got a type error: "
+          "only integer type is allowed in array element accessing.");
+    
+    if (!llvm::isa<ConstantArray>(target))
+      RECORD_ERR_AND_RETURN(ctx, "The target of "
+          "element-accessing is not an array");
+    return builder.CreateGEP(target, key);
+  } else {
+    UNIMPLEMENTED();
+  }
+  return nullptr;
+}
+
 Value* InitListExpr::codegen(CodegenContext& ctx) {
   Type *elementTy = ctx.get_llvm_type(element_ty_);
   ArrayType *arrayTy = ArrayType::get(elementTy, size());
@@ -176,6 +199,7 @@ Value* InitListExpr::codegen(CodegenContext& ctx) {
     }
   }
   // fill default values
+  // TODO(yang): use bit_cast to avoid direct value initialization.
   for (size_t i = init_exprs_.size(), e = size(); i != e; ++i)
     cvec.push_back(default_val);
   Value *ret_val = ConstantArray::get(arrayTy, cvec);

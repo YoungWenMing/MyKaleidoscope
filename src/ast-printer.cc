@@ -225,4 +225,13 @@ void AstPrinter::VisitInitListExpr(const InitListExpr* node) {
   PrintIndented("}\n");
 }
 
+void AstPrinter::VisitProperty(const Property* node) {
+  {
+    IndentScope scope(this, "Property:{");
+    PrintIndentedVisit("Key:", node->key_expr());
+    PrintIndentedVisit("Target:", node->target_expr());
+  }
+  PrintIndented("}\n");
+}
+
 } // Kaleidoscope 
